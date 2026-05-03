@@ -252,6 +252,55 @@ class ProfileFragment : Fragment() {
         val marginPx = (2 *
                 resources.displayMetrics.density).toInt()
 
+        // Build month label row
+        val monthRow = android.widget.TableRow(requireContext())
+        monthRow.layoutParams = android.widget.TableLayout.LayoutParams(
+            android.view.ViewGroup.LayoutParams.WRAP_CONTENT,
+            android.view.ViewGroup.LayoutParams.WRAP_CONTENT
+        )
+
+        val monthNames = listOf("Jan","Feb","Mar","Apr","May","Jun",
+            "Jul","Aug","Sep","Oct","Nov","Dec")
+        val numCols = days.size / 7
+        var lastMonthAdded = -1
+
+        for (col in 0 until numCols) {
+            val index = col * 7
+            val dateStr = days[index].first
+            val month = if (dateStr.isNotEmpty()) {
+                java.text.SimpleDateFormat("yyyy-MM-dd", java.util.Locale.getDefault())
+                    .parse(dateStr)?.let {
+                        java.util.Calendar.getInstance().apply { time = it }
+                            .get(java.util.Calendar.MONTH)
+                    } ?: -1
+            } else -1
+
+            val label = android.widget.TextView(requireContext())
+            val params = android.widget.TableRow.LayoutParams(cellSizePx + marginPx * 2, android.view.ViewGroup.LayoutParams.WRAP_CONTENT)
+            label.layoutParams = params
+            label.textSize = 9f
+            label.setTextColor(0xFF888888.toInt())
+            label.maxLines = 1
+
+            if (month != -1 && month != lastMonthAdded) {
+                // Only show label if this column's date is in the current year
+                val yearOfCol = if (dateStr.isNotEmpty()) {
+                    dateStr.substring(0, 4).toIntOrNull() ?: -1
+                } else -1
+                if (yearOfCol == currentYear) {
+                    label.text = monthNames[month]
+                    lastMonthAdded = month
+                } else {
+                    label.text = ""
+                }
+            } else {
+                label.text = ""
+            }
+            monthRow.addView(label)
+        }
+
+        tableLayout.addView(monthRow, 0) // Insert as first row
+
         for (row in 0..6) {
             val tableRow = android.widget.TableRow(
                 requireContext())
