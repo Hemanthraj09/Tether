@@ -39,7 +39,6 @@ class GroupCardAdapter(
         binding.tvMemberCount.text =
             "${group.members.size} member" +
             if (group.members.size != 1) "s" else ""
-        binding.tvGroupStreak.text = "0 day streak"
 
         val goalIcon = when (group.goalType
             .lowercase()) {

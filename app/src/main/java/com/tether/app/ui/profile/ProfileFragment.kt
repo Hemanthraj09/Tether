@@ -14,6 +14,9 @@ import com.tether.app.databinding.FragmentProfileBinding
 import com.tether.app.utils.TetherToast
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.tasks.await
+import java.text.SimpleDateFormat
+import java.util.Date
+import java.util.Locale
 
 class ProfileFragment : Fragment() {
 
@@ -55,6 +58,17 @@ class ProfileFragment : Fragment() {
         }
     }
 
+    private fun formatHours(hours: Double): String {
+        val totalMinutes = (hours * 60).toInt()
+        val h = totalMinutes / 60
+        val m = totalMinutes % 60
+        return when {
+            h == 0 -> "${m}m"
+            m == 0 -> "${h}h"
+            else -> "${h}h ${m}m"
+        }
+    }
+
     private fun loadUserData() {
         val uid = FirebaseAuth.getInstance().currentUser?.uid ?: return
         val email = FirebaseAuth.getInstance().currentUser?.email ?: ""
@@ -79,14 +93,24 @@ class ProfileFragment : Fragment() {
                     .uppercase()
                     .takeIf { it.isNotEmpty() } ?: "U"
 
+                val today = SimpleDateFormat("yyyy-MM-dd",
+                    Locale.getDefault()).format(Date())
+                val todayLogs = FirebaseFirestore.getInstance()
+                    .collection("logs")
+                    .whereEqualTo("userId", uid)
+                    .whereEqualTo("date", today)
+                    .get()
+                    .await()
+                val todayHours = todayLogs.documents
+                    .sumOf { it.getDouble("value") ?: 0.0 }
+
                 val currentStreak = userDoc.getLong("currentStreak")?.toInt() ?: 0
-                val totalHours = userDoc.getDouble("totalHours") ?: 0.0
 
                 binding.tvProfileName.text = name
                 binding.tvProfileEmail.text = email
                 binding.tvProfileInitials.text = initials
                 binding.tvStreakCount.text = currentStreak.toString()
-                binding.tvTotalHours.text = String.format("%.1f", totalHours) + "h"
+                binding.tvTotalHours.text = formatHours(todayHours)
                 binding.tvGroupCount.text = (userDoc.get("groupIds") as? List<*>)?.size?.toString() ?: "0"
 
                 loadHeatmapData(uid)
@@ -108,6 +132,8 @@ class ProfileFragment : Fragment() {
                     .get()
                     .await()
 
+                android.util.Log.d("HeatmapDebug", "Total logs fetched: ${logs.documents.size}")
+
                 val heatmapData = mutableMapOf<String, Double>()
 
                 logs.documents.forEach { doc ->
@@ -116,7 +142,10 @@ class ProfileFragment : Fragment() {
                     heatmapData[date] = (heatmapData[date] ?: 0.0) + hours
                 }
 
+                android.util.Log.d("HeatmapDebug", "Heatmap data: $heatmapData")
+
                 renderHeatmap(heatmapData)
+                android.util.Log.d("HeatmapDebug", "Render called with ${heatmapData.size} entries")
 
             } catch (e: Exception) {
                 // Heatmap load failed, show empty
@@ -131,24 +160,40 @@ class ProfileFragment : Fragment() {
         val sdf = java.text.SimpleDateFormat(
             "yyyy-MM-dd", java.util.Locale.getDefault())
 
-        // Build 364 days (52 weeks x 7 days)
-        // starting from 363 days ago
         val days = mutableListOf<Pair<String, Double>>()
-        val cal = java.util.Calendar.getInstance()
-        cal.add(java.util.Calendar.DAY_OF_MONTH, -363)
 
-        // Align to Monday of that week
-        while (cal.get(java.util.Calendar.DAY_OF_WEEK)
+        // Build full current year from Jan 1 to Dec 31
+        val yearCal = java.util.Calendar.getInstance()
+        val currentYear = yearCal.get(java.util.Calendar.YEAR)
+        
+        // Start from Jan 1 of current year
+        val startCal = java.util.Calendar.getInstance()
+        startCal.set(currentYear, java.util.Calendar.JANUARY, 1)
+        
+        // Align back to Monday before Jan 1
+        while (startCal.get(java.util.Calendar.DAY_OF_WEEK)
             != java.util.Calendar.MONDAY) {
-            cal.add(java.util.Calendar.DAY_OF_MONTH, -1)
+            startCal.add(java.util.Calendar.DAY_OF_MONTH, -1)
         }
 
-        for (i in 0..363) {
-            val dateStr = sdf.format(cal.time)
+        // End on Dec 31 of current year
+        val endCal = java.util.Calendar.getInstance()
+        endCal.set(currentYear, java.util.Calendar.DECEMBER, 31)
+
+        // Fill every day from aligned start to Dec 31
+        while (!startCal.after(endCal)) {
+            val dateStr = sdf.format(startCal.time)
             val hours = data[dateStr] ?: 0.0
             days.add(Pair(dateStr, hours))
-            cal.add(java.util.Calendar.DAY_OF_MONTH, 1)
+            startCal.add(java.util.Calendar.DAY_OF_MONTH, 1)
         }
+
+        // Pad to complete last week column
+        while (days.size % 7 != 0) {
+            days.add(Pair("", 0.0))
+        }
+
+        android.util.Log.d("HeatmapDebug", "First day: ${days.firstOrNull()?.first}, Last day: ${days.lastOrNull()?.first}, Today in list: ${days.any { it.first == java.text.SimpleDateFormat("yyyy-MM-dd", java.util.Locale.getDefault()).format(java.util.Date()) }}")
 
         // Outer horizontal ScrollView for wide grid
         val scrollView = android.widget.HorizontalScrollView(
@@ -202,7 +247,7 @@ class ProfileFragment : Fragment() {
                     android.view.ViewGroup.LayoutParams
                         .WRAP_CONTENT)
 
-            for (col in 0..51) {
+            for (col in 0 until (days.size / 7)) {
                 val index = col * 7 + row
                 val hours = if (index < days.size)
                     days[index].second else 0.0

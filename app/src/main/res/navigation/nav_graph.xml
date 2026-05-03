@@ -66,6 +66,10 @@
             app:launchSingleTop="true"
             app:popUpTo="@id/homeFragment"
             app:popUpToInclusive="false" />
+        <action
+            android:id="@+id/action_home_to_group"
+            app:destination="@id/groupFragment"
+            app:launchSingleTop="true" />
     </fragment>
 
     <fragment

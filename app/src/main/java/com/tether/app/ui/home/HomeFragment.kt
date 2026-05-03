@@ -70,7 +70,6 @@ class HomeFragment : Fragment() {
         })
 
         setupBottomNavigation()
-        setupFab()
 
         binding.tvGroupName.text = ""
         binding.tvDot.visibility = View.GONE
@@ -96,14 +95,7 @@ class HomeFragment : Fragment() {
         }
 
         binding.btnGroups.setOnClickListener {
-            findNavController().navigate(
-                R.id.groupFragment,
-                null,
-                NavOptions.Builder()
-                    .setPopUpTo(R.id.homeFragment, false)
-                    .setLaunchSingleTop(true)
-                    .build()
-            )
+            findNavController().navigate(R.id.action_home_to_group)
         }
     }
 
@@ -170,11 +162,9 @@ class HomeFragment : Fragment() {
     private fun showFeedOrEmptyState(hasGroup: Boolean) {
         if (hasGroup) {
             binding.feedRecyclerView.visibility = View.VISIBLE
-            binding.fabLog.visibility = View.VISIBLE
             binding.layoutEmptyState.visibility = View.GONE
         } else {
             binding.feedRecyclerView.visibility = View.GONE
-            binding.fabLog.visibility = View.GONE
             binding.layoutEmptyState.visibility = View.VISIBLE
         }
     }
@@ -212,12 +202,6 @@ class HomeFragment : Fragment() {
                 }
                 else -> false
             }
-        }
-    }
-
-    private fun setupFab() {
-        binding.fabLog.setOnClickListener {
-            findNavController().navigate(R.id.logBottomSheetFragment)
         }
     }
 

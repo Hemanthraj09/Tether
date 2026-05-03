@@ -72,7 +72,7 @@
             android:orientation="vertical"
             android:padding="24dp">
 
-            <!-- SECTION A — Hour stepper -->
+            <!-- SECTION A — Hour and Minute steppers -->
             <LinearLayout
                 android:layout_width="match_parent"
                 android:layout_height="wrap_content"
@@ -94,54 +94,137 @@
                     android:gravity="center"
                     android:orientation="horizontal">
 
-                    <android.widget.Button
-                        android:id="@+id/btnMinus"
-                        android:layout_width="56dp"
-                        android:layout_height="56dp"
-                        android:background="@drawable/bg_stepper_btn"
-                        android:padding="0dp"
-                        android:text="−"
-                        android:textColor="@color/colorTextPrimary"
-                        android:textSize="24sp" />
-
+                    <!-- Hours stepper -->
                     <LinearLayout
                         android:layout_width="wrap_content"
                         android:layout_height="wrap_content"
-                        android:layout_marginHorizontal="24dp"
                         android:gravity="center"
-                        android:orientation="horizontal">
+                        android:orientation="vertical">
 
                         <TextView
-                            android:id="@+id/tvHoursValue"
+                            android:layout_width="wrap_content"
+                            android:layout_height="wrap_content"
+                            android:text="Hours"
+                            android:textColor="@color/colorTextSecondary"
+                            android:textSize="12sp"
+                            android:layout_marginBottom="8dp" />
+
+                        <LinearLayout
                             android:layout_width="wrap_content"
                             android:layout_height="wrap_content"
                             android:gravity="center"
-                            android:minWidth="80dp"
-                            android:text="2.5"
-                            android:textColor="@color/colorTextPrimary"
-                            android:textSize="48sp"
-                            android:textStyle="bold" />
+                            android:orientation="horizontal">
+
+                            <android.widget.Button
+                                android:id="@+id/btnHourMinus"
+                                android:layout_width="44dp"
+                                android:layout_height="44dp"
+                                android:background="@drawable/bg_stepper_btn"
+                                android:padding="0dp"
+                                android:text="−"
+                                android:textColor="@color/colorTextPrimary"
+                                android:textSize="20sp" />
+
+                            <TextView
+                                android:id="@+id/tvHoursValue"
+                                android:layout_width="56dp"
+                                android:layout_height="wrap_content"
+                                android:gravity="center"
+                                android:text="0"
+                                android:textColor="@color/colorTextPrimary"
+                                android:textSize="40sp"
+                                android:textStyle="bold" />
+
+                            <android.widget.Button
+                                android:id="@+id/btnHourPlus"
+                                android:layout_width="44dp"
+                                android:layout_height="44dp"
+                                android:background="@drawable/bg_stepper_btn"
+                                android:padding="0dp"
+                                android:text="+"
+                                android:textColor="@color/colorTextPrimary"
+                                android:textSize="20sp" />
+                        </LinearLayout>
 
                         <TextView
                             android:layout_width="wrap_content"
                             android:layout_height="wrap_content"
-                            android:layout_gravity="bottom"
-                            android:layout_marginBottom="6dp"
-                            android:text="h"
+                            android:text="hr"
                             android:textColor="@color/colorAccent"
-                            android:textSize="24sp"
-                            android:textStyle="bold" />
+                            android:textSize="14sp"
+                            android:layout_marginTop="4dp" />
                     </LinearLayout>
 
-                    <android.widget.Button
-                        android:id="@+id/btnPlus"
-                        android:layout_width="56dp"
-                        android:layout_height="56dp"
-                        android:background="@drawable/bg_stepper_btn"
-                        android:padding="0dp"
-                        android:text="+"
+                    <!-- Separator -->
+                    <TextView
+                        android:layout_width="wrap_content"
+                        android:layout_height="wrap_content"
+                        android:layout_marginHorizontal="16dp"
+                        android:text=":"
                         android:textColor="@color/colorTextPrimary"
-                        android:textSize="24sp" />
+                        android:textSize="40sp"
+                        android:textStyle="bold" />
+
+                    <!-- Minutes stepper -->
+                    <LinearLayout
+                        android:layout_width="wrap_content"
+                        android:layout_height="wrap_content"
+                        android:gravity="center"
+                        android:orientation="vertical">
+
+                        <TextView
+                            android:layout_width="wrap_content"
+                            android:layout_height="wrap_content"
+                            android:text="Minutes"
+                            android:textColor="@color/colorTextSecondary"
+                            android:textSize="12sp"
+                            android:layout_marginBottom="8dp" />
+
+                        <LinearLayout
+                            android:layout_width="wrap_content"
+                            android:layout_height="wrap_content"
+                            android:gravity="center"
+                            android:orientation="horizontal">
+
+                            <android.widget.Button
+                                android:id="@+id/btnMinuteMinus"
+                                android:layout_width="44dp"
+                                android:layout_height="44dp"
+                                android:background="@drawable/bg_stepper_btn"
+                                android:padding="0dp"
+                                android:text="−"
+                                android:textColor="@color/colorTextPrimary"
+                                android:textSize="20sp" />
+
+                            <TextView
+                                android:id="@+id/tvMinutesValue"
+                                android:layout_width="56dp"
+                                android:layout_height="wrap_content"
+                                android:gravity="center"
+                                android:text="00"
+                                android:textColor="@color/colorTextPrimary"
+                                android:textSize="40sp"
+                                android:textStyle="bold" />
+
+                            <android.widget.Button
+                                android:id="@+id/btnMinutePlus"
+                                android:layout_width="44dp"
+                                android:layout_height="44dp"
+                                android:background="@drawable/bg_stepper_btn"
+                                android:padding="0dp"
+                                android:text="+"
+                                android:textColor="@color/colorTextPrimary"
+                                android:textSize="20sp" />
+                        </LinearLayout>
+
+                        <TextView
+                            android:layout_width="wrap_content"
+                            android:layout_height="wrap_content"
+                            android:text="min"
+                            android:textColor="@color/colorAccent"
+                            android:textSize="14sp"
+                            android:layout_marginTop="4dp" />
+                    </LinearLayout>
                 </LinearLayout>
             </LinearLayout>
 

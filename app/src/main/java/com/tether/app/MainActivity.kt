@@ -1,14 +1,19 @@
 package com.tether.app
 
+import android.content.Intent
 import android.os.Bundle
 import androidx.activity.OnBackPressedCallback
 import androidx.appcompat.app.AppCompatActivity
 import androidx.core.view.WindowCompat
 import androidx.core.view.WindowInsetsControllerCompat
+import androidx.lifecycle.lifecycleScope
 import androidx.navigation.NavController
+import androidx.navigation.findNavController
 import androidx.navigation.fragment.NavHostFragment
 import com.tether.app.data.repository.AuthRepository
 import com.tether.app.databinding.ActivityMainBinding
+import kotlinx.coroutines.launch
+import kotlinx.coroutines.tasks.await
 
 class MainActivity : AppCompatActivity() {
 
@@ -24,6 +29,45 @@ class MainActivity : AppCompatActivity() {
         setupWindowDecor()
         setupNavController()
         setupBackPress()
+    }
+
+    override fun onNewIntent(intent: Intent) {
+        super.onNewIntent(intent)
+        handleTimerNotificationIntent(intent)
+    }
+
+    override fun onResume() {
+        super.onResume()
+        handleTimerNotificationIntent(intent)
+    }
+
+    private fun handleTimerNotificationIntent(intent: Intent?) {
+        val groupId = intent?.getStringExtra("navigateToGroupId")
+            ?: return
+        if (groupId.isEmpty()) return
+        // Clear the extra so it doesn't re-trigger on rotation
+        intent.removeExtra("navigateToGroupId")
+
+        // Fetch group details and navigate to GroupFeedFragment
+        lifecycleScope.launch {
+            try {
+                val groupDoc = com.google.firebase.firestore
+                    .FirebaseFirestore.getInstance()
+                    .collection("groups")
+                    .document(groupId)
+                    .get()
+                    .await()
+                val groupName = groupDoc.getString("name") ?: ""
+                val goalType = groupDoc.getString("goalType") ?: ""
+                val bundle = android.os.Bundle().apply {
+                    putString("groupId", groupId)
+                    putString("groupName", groupName)
+                    putString("groupGoal", goalType)
+                }
+                findNavController(R.id.navHostFragment)
+                    .navigate(R.id.groupFeedFragment, bundle)
+            } catch (e: Exception) {}
+        }
     }
 
     private fun setupWindowDecor() {

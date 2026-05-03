@@ -44,31 +44,11 @@ class GroupListFragment : Fragment() {
         groupViewModel.loadUserGroups()
 
         binding.btnJoinCreateFromList.setOnClickListener {
-            findNavController().navigate(
-                R.id.groupFragment,
-                null,
-                androidx.navigation.NavOptions.Builder()
-                    .setPopUpTo(R.id.groupListFragment, false)
-                    .setLaunchSingleTop(true)
-                    .build()
-            )
+            findNavController().navigate(R.id.action_groupList_to_group)
         }
 
-        binding.fabLogList.setOnClickListener {
-            showQuickLogBottomSheet()
-        }
-    }
-
-    private fun showQuickLogBottomSheet() {
-        if (groupViewModel.userGroupsState.value is UserGroupsState.Success) {
-            val groups = (groupViewModel.userGroupsState.value as UserGroupsState.Success).groups
-            if (groups.isNotEmpty()) {
-                val firstGroupId = groups.first().id
-                val bottomSheet = com.tether.app.ui.log.LogBottomSheetFragment.newInstance(firstGroupId)
-                bottomSheet.show(parentFragmentManager, "LogBottomSheet")
-            } else {
-                TetherToast.show(requireContext(), "Join a group to start logging!", isError = true)
-            }
+        binding.btnJoinCreateGroup.setOnClickListener {
+            findNavController().navigate(R.id.action_groupList_to_group)
         }
     }
 
@@ -82,7 +62,6 @@ class GroupListFragment : Fragment() {
                     }
                     is UserGroupsState.Success -> {
                         val groups = state.groups
-                        binding.fabLogList.visibility = if (groups.isEmpty()) View.GONE else View.VISIBLE
                         if (groups.isEmpty()) {
                             binding.groupListRecyclerView.visibility = View.GONE
                             binding.layoutNoGroups.visibility = View.VISIBLE
@@ -127,14 +106,8 @@ class GroupListFragment : Fragment() {
             "groupGoal" to group.goalType
         )
         findNavController().navigate(
-            R.id.groupFeedFragment,
-            bundle,
-            androidx.navigation.NavOptions.Builder()
-                .setEnterAnim(R.anim.slide_in_right)
-                .setExitAnim(R.anim.slide_out_left)
-                .setPopEnterAnim(R.anim.slide_in_left)
-                .setPopExitAnim(R.anim.slide_out_right)
-                .build()
+            R.id.action_groupList_to_feed,
+            bundle
         )
     }
 

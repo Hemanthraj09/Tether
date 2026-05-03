@@ -12,12 +12,14 @@ import com.tether.app.R
 import com.tether.app.databinding.LayoutLogBottomSheetBinding
 import com.tether.app.ui.home.GroupFeedViewModel
 import com.tether.app.utils.TetherToast
+import java.util.Locale
 
 class LogBottomSheetFragment : BottomSheetDialogFragment() {
 
     private var _binding: LayoutLogBottomSheetBinding? = null
     private val binding get() = _binding!!
-    private var currentHours = 2.5
+    private var currentHours = 0
+    private var currentMinutes = 0
     private var groupId: String = ""
     private val viewModel: GroupFeedViewModel by activityViewModels()
 
@@ -42,18 +44,42 @@ class LogBottomSheetFragment : BottomSheetDialogFragment() {
     ) {
         super.onViewCreated(view, savedInstanceState)
 
-        updateHoursDisplay()
+        updateDisplay()
 
-        binding.btnMinus.setOnClickListener {
-            if (currentHours > 0.0) {
-                currentHours = (currentHours - 0.5)
-                updateHoursDisplay()
+        binding.btnHourMinus.setOnClickListener {
+            if (currentHours > 0) {
+                currentHours--
+                updateDisplay()
             }
         }
 
-        binding.btnPlus.setOnClickListener {
-            currentHours = (currentHours + 0.5)
-            updateHoursDisplay()
+        binding.btnHourPlus.setOnClickListener {
+            if (currentHours < 12) {
+                currentHours++
+                updateDisplay()
+            }
+        }
+
+        binding.btnMinuteMinus.setOnClickListener {
+            if (currentMinutes > 0) {
+                currentMinutes -= 5
+                updateDisplay()
+            } else if (currentHours > 0) {
+                currentHours--
+                currentMinutes = 55
+                updateDisplay()
+            }
+        }
+
+        binding.btnMinutePlus.setOnClickListener {
+            if (currentMinutes < 55) {
+                currentMinutes += 5
+                updateDisplay()
+            } else {
+                currentMinutes = 0
+                if (currentHours < 12) currentHours++
+                updateDisplay()
+            }
         }
 
         binding.switchPhoto.setOnCheckedChangeListener { _, isChecked ->
@@ -66,19 +92,25 @@ class LogBottomSheetFragment : BottomSheetDialogFragment() {
         }
 
         binding.btnLogIt.setOnClickListener {
-            if (currentHours == 0.0) {
+            if (currentHours == 0 && currentMinutes == 0) {
                 TetherToast.show(
                     requireContext(),
-                    "Please log at least 0.5 hours",
+                    "Please log at least 5 minutes",
                     isError = true
                 )
                 return@setOnClickListener
             }
+            val totalHours = currentHours + (currentMinutes / 60.0)
             val note = binding.etNote.text.toString().trim()
-            viewModel.writeLog(groupId, currentHours, note)
+            viewModel.writeLog(groupId, totalHours, note)
+            val timeStr = when {
+                currentHours == 0 -> "${currentMinutes}m"
+                currentMinutes == 0 -> "${currentHours}h"
+                else -> "${currentHours}h ${currentMinutes}m"
+            }
             TetherToast.show(
                 requireContext(),
-                "Logged ${currentHours}h! Keep it up 🔥"
+                "Logged $timeStr! Keep it up 🔥"
             )
             dismiss()
         }
@@ -99,8 +131,9 @@ class LogBottomSheetFragment : BottomSheetDialogFragment() {
         }
     }
 
-    private fun updateHoursDisplay() {
+    private fun updateDisplay() {
         binding.tvHoursValue.text = currentHours.toString()
+        binding.tvMinutesValue.text = String.format(Locale.getDefault(), "%02d", currentMinutes)
     }
 
     override fun onDestroyView() {

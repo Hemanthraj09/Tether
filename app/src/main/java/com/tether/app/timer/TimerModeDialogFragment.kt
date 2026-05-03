@@ -53,6 +53,9 @@ class TimerModeDialogFragment : DialogFragment() {
         }
         requireContext().startForegroundService(intent)
 
+        val updateIntent = Intent("com.tether.app.TIMER_STARTED")
+        requireContext().sendBroadcast(updateIntent)
+
         // Show control fragment
         TimerControlFragment.newInstance().show(parentFragmentManager, "TimerControl")
     }

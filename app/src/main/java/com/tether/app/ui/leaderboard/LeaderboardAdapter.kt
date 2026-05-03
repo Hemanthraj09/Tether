@@ -62,6 +62,13 @@ class LeaderboardAdapter(private var items: List<LeaderboardItem>) :
             tvStreak.text = "${item.streak} ${context.getString(R.string.day_streak)}"
             tvHours.text = formatHours(item.hours)
 
+            if (item.paceLabel.isNotEmpty()) {
+                tvPaceLabel.visibility = View.VISIBLE
+                tvPaceLabel.text = item.paceLabel
+            } else {
+                tvPaceLabel.visibility = View.GONE
+            }
+
             if (item.isCurrentUser) {
                 root.background = ContextCompat.getDrawable(context, R.drawable.bg_leaderboard_row_active)
             } else {

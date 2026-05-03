@@ -29,6 +29,7 @@ class GroupFeedFragment : Fragment() {
     private var groupId: String = ""
     private var groupName: String = ""
     private var groupGoal: String = ""
+    private var groupInviteCode: String = ""
 
     override fun onCreateView(
         inflater: LayoutInflater,
@@ -70,8 +71,25 @@ class GroupFeedFragment : Fragment() {
             }
         }
 
+        viewLifecycleOwner.lifecycleScope.launch {
+            try {
+                val groupDoc = com.google.firebase.firestore.FirebaseFirestore.getInstance()
+                    .collection("groups")
+                    .document(groupId)
+                    .get()
+                    .await()
+                groupInviteCode = groupDoc.getString("inviteCode") ?: ""
+            } catch (e: Exception) {}
+        }
+
+        binding.btnGroupInfo.setOnClickListener {
+            if (groupInviteCode.isEmpty()) return@setOnClickListener
+            val popup = android.widget.PopupMenu(requireContext(), binding.btnGroupInfo)
+            popup.menu.add("Invite Code: $groupInviteCode")
+            popup.show()
+        }
+
         setupRecyclerViews()
-        observeFeed()
         observeMemberStats()
         observeLogState()
         observeGroupAction()
@@ -83,53 +101,88 @@ class GroupFeedFragment : Fragment() {
             findNavController().popBackStack()
         }
 
-        binding.fabLogFeed.setOnClickListener {
-            showLogBottomSheet()
-        }
-
         binding.btnFeedMore.setOnClickListener {
             showGroupOptionsMenu()
         }
 
+        binding.fabLogFeed.setOnClickListener {
+            showLogBottomSheet()
+        }
+
         binding.btnStartSession.setOnClickListener {
-            // Check if timer is already running
-            if (isServiceRunning(com.tether.app.timer.TetherTimerService::class.java)) {
-                com.tether.app.timer.TimerControlFragment.newInstance().show(childFragmentManager, "TimerControl")
+            if (com.tether.app.timer.TetherTimerService.isRunning) {
+                com.tether.app.timer.TimerControlFragment.newInstance()
+                    .show(childFragmentManager, "TimerControl")
             } else {
                 val dialog = TimerModeDialogFragment.newInstance(groupId)
                 dialog.show(childFragmentManager, "TimerModeDialog")
+                // Optimistically update to "Session Active" immediately
+                binding.btnStartSession.text = "Session Active ●"
+                binding.btnStartSession.chipBackgroundColor =
+                    android.content.res.ColorStateList.valueOf(
+                        android.graphics.Color.parseColor("#1A1A1A")
+                    )
             }
         }
 
         registerTimerReceiver()
-    }
-
-    private fun isServiceRunning(serviceClass: Class<*>): Boolean {
-        val manager = requireContext().getSystemService(android.content.Context.ACTIVITY_SERVICE) as android.app.ActivityManager
-        for (service in manager.getRunningServices(Int.MAX_VALUE)) {
-            if (serviceClass.name == service.service.className) {
-                return true
+        childFragmentManager.setFragmentResultListener("timer_stopped", viewLifecycleOwner) { _, bundle ->
+            updateSessionButton(forceInactive = true)
+            val focusSeconds = bundle.getLong("focusSeconds", 0L)
+            val groupId = bundle.getString("groupId", "")
+            if (focusSeconds > 0 && groupId.isNotEmpty()) {
+                TimerNoteDialogFragment.newInstance(focusSeconds, groupId)
+                    .show(childFragmentManager, "TimerNoteDialog")
             }
         }
-        return false
+        updateSessionButton()
+    }
+
+    override fun onResume() {
+        super.onResume()
+        updateSessionButton()
+    }
+
+    fun updateSessionButton(forceInactive: Boolean = false) {
+        val isRunning = !forceInactive && com.tether.app.timer.TetherTimerService.isRunning
+        android.util.Log.d("TetherDebug", "updateSessionButton called: forceInactive=$forceInactive, isRunning=${com.tether.app.timer.TetherTimerService.isRunning}")
+        binding.btnStartSession.post {
+            if (isRunning) {
+                binding.btnStartSession.text = "Session Active ●"
+                binding.btnStartSession.setChipBackgroundColorResource(R.color.colorSurface)
+            } else {
+                binding.btnStartSession.text = "Start Session"
+                binding.btnStartSession.setChipBackgroundColorResource(R.color.colorAccent)
+            }
+        }
     }
 
     private val timerReceiver = object : android.content.BroadcastReceiver() {
         override fun onReceive(context: android.content.Context?, intent: android.content.Intent?) {
-            if (intent?.action == com.tether.app.timer.TetherTimerService.ACTION_TIMER_FINISHED) {
-                val focusSeconds = intent.getLongExtra(com.tether.app.timer.TetherTimerService.EXTRA_FOCUS_SECONDS, 0L)
-                val finishedGroupId = intent.getStringExtra(com.tether.app.timer.TetherTimerService.EXTRA_GROUP_ID) ?: ""
-                
-                if (finishedGroupId == groupId) {
-                    val dialog = TimerNoteDialogFragment.newInstance(focusSeconds, finishedGroupId)
-                    dialog.show(childFragmentManager, "TimerNoteDialog")
+            android.util.Log.d("TetherDebug", "Broadcast received: ${intent?.action}")
+            when (intent?.action) {
+                com.tether.app.timer.TetherTimerService.ACTION_TIMER_FINISHED -> {
+                    val focusSeconds = intent.getLongExtra(com.tether.app.timer.TetherTimerService.EXTRA_FOCUS_SECONDS, 0L)
+                    val finishedGroupId = intent.getStringExtra(com.tether.app.timer.TetherTimerService.EXTRA_GROUP_ID) ?: ""
+                    
+                    if (finishedGroupId == groupId) {
+                        val dialog = TimerNoteDialogFragment.newInstance(focusSeconds, finishedGroupId)
+                        dialog.show(childFragmentManager, "TimerNoteDialog")
+                        dialog.lifecycle.addObserver(object : androidx.lifecycle.DefaultLifecycleObserver {
+                            override fun onDestroy(owner: androidx.lifecycle.LifecycleOwner) {
+                                updateSessionButton(forceInactive = true)
+                            }
+                        })
+                    }
                 }
             }
         }
     }
 
     private fun registerTimerReceiver() {
-        val filter = android.content.IntentFilter(com.tether.app.timer.TetherTimerService.ACTION_TIMER_FINISHED)
+        val filter = android.content.IntentFilter().apply {
+            addAction(com.tether.app.timer.TetherTimerService.ACTION_TIMER_FINISHED)
+        }
         androidx.core.content.ContextCompat.registerReceiver(
             requireContext(),
             timerReceiver,
@@ -141,11 +194,6 @@ class GroupFeedFragment : Fragment() {
     private fun setupRecyclerViews() {
         binding.membersRecyclerView.layoutManager =
             LinearLayoutManager(requireContext())
-        
-        binding.feedRecyclerView.layoutManager =
-            LinearLayoutManager(requireContext())
-        binding.feedRecyclerView.adapter =
-            FeedAdapter(emptyList())
     }
 
     private fun observeMemberStats() {
@@ -157,9 +205,11 @@ class GroupFeedFragment : Fragment() {
                         name = entry.name,
                         initials = entry.initials,
                         hours = entry.hours,
+                        todayHours = entry.todayHours,
                         streak = entry.streak,
                         avatarColorHex = entry.avatarColorHex,
-                        isCurrentUser = entry.isCurrentUser
+                        isCurrentUser = entry.isCurrentUser,
+                        paceLabel = entry.paceLabel
                     )
                 }
                 
@@ -168,32 +218,6 @@ class GroupFeedFragment : Fragment() {
                     binding.membersRecyclerView.adapter = LeaderboardAdapter(items)
                 } else {
                     adapter.updateItems(items)
-                }
-            }
-        }
-    }
-
-    private fun observeFeed() {
-        viewLifecycleOwner.lifecycleScope.launch {
-            viewModel.feedLogs.collect { logs ->
-                if (logs.isEmpty()) {
-                    binding.feedRecyclerView.visibility = View.GONE
-                    binding.tvEmptyFeed.visibility = View.VISIBLE
-                } else {
-                    binding.feedRecyclerView.visibility = View.VISIBLE
-                    binding.tvEmptyFeed.visibility = View.GONE
-                    val feedItems = logs.map { log ->
-                        FeedItem(
-                            id = log.id.hashCode(),
-                            name = log.userName,
-                            initials = log.userInitials,
-                            hours = log.value,
-                            note = log.note,
-                            timeAgo = "Today",
-                            avatarColorHex = log.avatarColorHex
-                        )
-                    }
-                    binding.feedRecyclerView.adapter = FeedAdapter(feedItems)
                 }
             }
         }

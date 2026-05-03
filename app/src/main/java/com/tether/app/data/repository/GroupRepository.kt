@@ -88,6 +88,11 @@ class GroupRepository {
                         "in this group."))
             }
 
+            if (group.members.size >= 6) {
+                return Result.failure(
+                    Exception("This group is full. Maximum 6 members allowed."))
+            }
+
             firestore.collection("groups")
                 .document(group.id)
                 .update("members",

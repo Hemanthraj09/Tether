@@ -34,6 +34,8 @@ class LeaderboardRepository {
         groupId: String
     ): Flow<List<LeaderboardEntry>> = callbackFlow {
         val weekKey = getCurrentWeekKey()
+        val today = java.text.SimpleDateFormat("yyyy-MM-dd",
+            java.util.Locale.getDefault()).format(java.util.Date())
         
         val groupListener = firestore
             .collection("groups")
@@ -55,9 +57,21 @@ class LeaderboardRepository {
                 }
             }
 
+        val dailyListener = firestore
+            .collection("groupStats")
+            .document(groupId)
+            .collection("daily")
+            .document(today)
+            .addSnapshotListener { _, _ ->
+                repositoryScope.launch {
+                    trySend(fetchLeaderboardData(groupId))
+                }
+            }
+
         awaitClose {
             groupListener.remove()
             statsListener.remove()
+            dailyListener.remove()
         }
     }
 
@@ -88,6 +102,32 @@ class LeaderboardRepository {
             null
         }
 
+        val today = java.text.SimpleDateFormat("yyyy-MM-dd",
+            java.util.Locale.getDefault()).format(java.util.Date())
+
+        val yesterday = java.text.SimpleDateFormat("yyyy-MM-dd",
+            java.util.Locale.getDefault()).let { sdf ->
+            val cal = java.util.Calendar.getInstance()
+            cal.add(java.util.Calendar.DAY_OF_MONTH, -1)
+            sdf.format(cal.time)
+        }
+
+        val todayStatsSnapshot = try {
+            firestore.collection("groupStats")
+                .document(groupId)
+                .collection("daily")
+                .document(today)
+                .get().await()
+        } catch (e: Exception) { null }
+
+        val yesterdayStatsSnapshot = try {
+            firestore.collection("groupStats")
+                .document(groupId)
+                .collection("daily")
+                .document(yesterday)
+                .get().await()
+        } catch (e: Exception) { null }
+
         return group.members.map { uid ->
             val userDoc = firestore
                 .collection("users")
@@ -97,11 +137,51 @@ class LeaderboardRepository {
 
             val name = userDoc
                 .getString("name") ?: "Unknown"
-            val streak = userDoc
-                .getLong("currentStreak")
-                ?.toInt() ?: 0
+            
+            val streakDoc = try {
+                firestore.collection("groupStats")
+                    .document(groupId)
+                    .collection("streaks")
+                    .document(uid)
+                    .get().await()
+            } catch (e: Exception) { null }
+            val streak = streakDoc?.getLong("currentStreak")?.toInt() ?: 0
 
             val hours = hoursDocSnapshot?.getDouble(uid) ?: 0.0
+
+            val todayHours = todayStatsSnapshot?.getDouble(uid) ?: 0.0
+            val yesterdayHours = yesterdayStatsSnapshot?.getDouble(uid) ?: 0.0
+
+            // Calculate group average for today (exclude this member)
+            val otherMemberHours = group.members
+                .filter { it != uid }
+                .map { todayStatsSnapshot?.getDouble(it) ?: 0.0 }
+            val groupAvgToday = if (otherMemberHours.isEmpty()) 0.0
+            else otherMemberHours.average()
+
+            // Pace logic: only show if behind
+            val paceDiff = todayHours - yesterdayHours
+            val avgDiff = todayHours - groupAvgToday
+
+            val paceLabel = when {
+                yesterdayHours > 0 && paceDiff < -0.5 -> {
+                    val h = Math.abs(paceDiff)
+                    val totalMins = (h * 60).toInt()
+                    val hrs = totalMins / 60
+                    val mins = totalMins % 60
+                    if (hrs > 0) "${hrs}h ${mins}m less than yesterday"
+                    else "${mins}m less than yesterday"
+                }
+                otherMemberHours.isNotEmpty() && avgDiff < -0.5 -> {
+                    val h = Math.abs(avgDiff)
+                    val totalMins = (h * 60).toInt()
+                    val hrs = totalMins / 60
+                    val mins = totalMins % 60
+                    if (hrs > 0) "${hrs}h ${mins}m below group avg"
+                    else "${mins}m below group avg"
+                }
+                else -> ""
+            }
 
             val initials = name
                 .split(" ")
@@ -126,9 +206,11 @@ class LeaderboardRepository {
                 name = name,
                 initials = initials,
                 hours = hours,
+                todayHours = todayHours,
                 streak = streak,
                 avatarColorHex = avatarColor,
-                isCurrentUser = uid == currentUid
+                isCurrentUser = uid == currentUid,
+                paceLabel = paceLabel
             )
         }.sortedByDescending { it.hours }
     }
@@ -146,7 +228,9 @@ data class LeaderboardEntry(
     val name: String,
     val initials: String,
     val hours: Double,
+    val todayHours: Double = 0.0,
     val streak: Int,
     val avatarColorHex: String,
-    val isCurrentUser: Boolean
+    val isCurrentUser: Boolean,
+    val paceLabel: String = ""
 )

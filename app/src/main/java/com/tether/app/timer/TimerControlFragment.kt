@@ -47,7 +47,14 @@ class TimerControlFragment : BottomSheetDialogFragment() {
         super.onViewCreated(view, savedInstanceState)
 
         binding.btnStop.setOnClickListener {
+            val focusSeconds = timerService?.focusSeconds ?: 0L
+            val groupId = timerService?.groupId ?: ""
             timerService?.stopTimer()
+            val result = Bundle().apply {
+                putLong("focusSeconds", focusSeconds)
+                putString("groupId", groupId)
+            }
+            parentFragmentManager.setFragmentResult("timer_stopped", result)
             dismiss()
         }
 

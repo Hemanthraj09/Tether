@@ -42,13 +42,7 @@ class TimerNoteDialogFragment : DialogFragment() {
         binding.btnLogIt.setOnClickListener {
             val note = binding.etNote.text.toString().trim()
             viewModel.writeLog(groupId, hours, note)
-            TetherToast.show(requireContext(), "Logged ${String.format(java.util.Locale.getDefault(), "%.1f", hours)}h! Keep it up 🔥")
-            dismiss()
-        }
-
-        binding.btnSkip.setOnClickListener {
-            viewModel.writeLog(groupId, hours, "")
-            TetherToast.show(requireContext(), "Logged ${String.format(java.util.Locale.getDefault(), "%.1f", hours)}h! Keep it up 🔥")
+            TetherToast.show(requireContext(), "Logged $timeStr! Keep it up 🔥")
             dismiss()
         }
     }

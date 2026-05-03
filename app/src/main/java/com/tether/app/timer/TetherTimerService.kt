@@ -41,6 +41,7 @@ class TetherTimerService : Service() {
     }
 
     override fun onStartCommand(intent: Intent?, flags: Int, startId: Int): Int {
+        isRunning = true
         val action = intent?.action
         if (action == ACTION_STOP) {
             stopTimer()
@@ -63,6 +64,11 @@ class TetherTimerService : Service() {
         startTimerTask()
 
         return START_STICKY
+    }
+
+    override fun onDestroy() {
+        isRunning = false
+        super.onDestroy()
     }
 
     private fun startTimerTask() {
@@ -134,6 +140,7 @@ class TetherTimerService : Service() {
         timer?.cancel()
         broadcastFinished()
         stopForeground(true)
+        isRunning = false
         stopSelf()
     }
 
@@ -151,16 +158,24 @@ class TetherTimerService : Service() {
     }
 
     private fun buildNotification(): Notification {
-        val intent = Intent(this, MainActivity::class.java)
-        val pendingIntent = PendingIntent.getActivity(this, 0, intent, PendingIntent.FLAG_IMMUTABLE)
-
+        val intent = Intent(this, MainActivity::class.java).apply {
+            putExtra("navigateToGroupId", groupId)
+            flags = Intent.FLAG_ACTIVITY_SINGLE_TOP or
+                    Intent.FLAG_ACTIVITY_CLEAR_TOP
+        }
+        val pendingIntent = PendingIntent.getActivity(
+            this, 0, intent,
+            PendingIntent.FLAG_IMMUTABLE or
+                    PendingIntent.FLAG_UPDATE_CURRENT
+        )
         val timeStr = formatTime(currentSeconds)
-        val phaseStr = if (currentPhase == Phase.FOCUSING) "Focusing" else "Break"
+        val phaseStr = if (currentPhase == Phase.FOCUSING)
+            "Focusing" else "Break"
 
         return NotificationCompat.Builder(this, CHANNEL_ID)
             .setContentTitle("Tether — Active Session")
             .setContentText("$phaseStr • $timeStr")
-            .setSmallIcon(R.drawable.ic_flame) // Assuming ic_flame exists
+            .setSmallIcon(R.drawable.ic_flame)
             .setOngoing(true)
             .setContentIntent(pendingIntent)
             .setOnlyAlertOnce(true)
@@ -189,8 +204,12 @@ class TetherTimerService : Service() {
     }
 
     companion object {
+        var isRunning = false
+            private set
+
         const val ACTION_STOP = "com.tether.app.STOP_TIMER"
         const val ACTION_TIMER_FINISHED = "com.tether.app.TIMER_FINISHED"
+        const val ACTION_SESSION_LOGGED = "com.tether.app.SESSION_LOGGED"
         const val EXTRA_GROUP_ID = "groupId"
         const val EXTRA_MODE = "timerMode"
         const val EXTRA_FOCUS_SECONDS = "focusSeconds"

@@ -118,37 +118,30 @@ class LogRepository {
                         .FieldValue.increment(hours))
                 .await()
 
-            val userDocSnapshot = firestore
-                .collection("users")
+            val streakRef = firestore
+                .collection("groupStats")
+                .document(groupId)
+                .collection("streaks")
                 .document(currentUid)
-                .get()
-                .await()
 
-            val lastLogDate = userDocSnapshot
-                .getString("lastLogDate") ?: ""
-            val currentStreak = userDocSnapshot
-                .getLong("currentStreak")?.toInt() ?: 0
-            val longestStreak = userDocSnapshot
-                .getLong("longestStreak")?.toInt() ?: 0
+            val streakDoc = streakRef.get().await()
+            val lastLogDate = streakDoc.getString("lastLogDate") ?: ""
+            val currentStreak = streakDoc.getLong("currentStreak")?.toInt() ?: 0
+            val longestStreak = streakDoc.getLong("longestStreak")?.toInt() ?: 0
 
             val newStreak = when {
                 lastLogDate == today -> currentStreak
-                lastLogDate == getPreviousDay(today) ->
-                    currentStreak + 1
+                lastLogDate == getPreviousDay(today) -> currentStreak + 1
                 else -> 1
             }
 
-            val newLongestStreak = maxOf(
-                newStreak, longestStreak)
+            val newLongestStreak = maxOf(newStreak, longestStreak)
 
-            firestore.collection("users")
-                .document(currentUid)
-                .update(mapOf(
-                    "lastLogDate" to today,
-                    "currentStreak" to newStreak,
-                    "longestStreak" to newLongestStreak
-                ))
-                .await()
+            streakRef.set(mapOf(
+                "lastLogDate" to today,
+                "currentStreak" to newStreak,
+                "longestStreak" to newLongestStreak
+            ), com.google.firebase.firestore.SetOptions.merge()).await()
 
             Result.success(Unit)
         } catch (e: Exception) {

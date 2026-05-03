@@ -36,7 +36,7 @@
     <string name="join_group_btn">Join Group</string>
     <string name="create_group_btn">Create Group</string>
     <string name="day_streak_label">Day Streak</string>
-    <string name="total_hours_label">Total Hours</string>
+    <string name="total_hours_label">Today</string>
     <string name="groups_label">Groups</string>
     <string name="activity_heatmap">Activity Heatmap</string>
     <string name="coming_soon">Coming soon</string>

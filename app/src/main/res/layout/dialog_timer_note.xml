@@ -27,37 +27,19 @@
             android:id="@+id/etNote"
             android:layout_width="match_parent"
             android:layout_height="wrap_content"
-            android:hint="What did you work on? (optional)"
+            android:hint="Optional"
             android:textColor="@color/colorTextPrimary"
             android:textColorHint="@color/colorTextSecondary"
             android:background="@drawable/bg_input_field"
             android:padding="16dp"
             android:layout_marginBottom="24dp" />
 
-        <LinearLayout
+        <Button
+            android:id="@+id/btnLogIt"
             android:layout_width="match_parent"
-            android:layout_height="wrap_content"
-            android:orientation="horizontal">
-
-            <Button
-                android:id="@+id/btnSkip"
-                android:layout_width="0dp"
-                android:layout_height="56dp"
-                android:layout_weight="1"
-                android:text="Skip"
-                android:backgroundTint="@color/elevated"
-                android:textColor="@color/colorTextPrimary"
-                android:layout_marginEnd="8dp" />
-
-            <Button
-                android:id="@+id/btnLogIt"
-                android:layout_width="0dp"
-                android:layout_height="56dp"
-                android:layout_weight="1"
-                android:text="Log It"
-                android:backgroundTint="@color/colorAccent"
-                android:textColor="@color/colorTextPrimary"
-                android:layout_marginStart="8dp" />
-        </LinearLayout>
+            android:layout_height="56dp"
+            android:text="Log It"
+            android:backgroundTint="@color/colorAccent"
+            android:textColor="@color/colorTextPrimary" />
     </LinearLayout>
 </androidx.cardview.widget.CardView>
