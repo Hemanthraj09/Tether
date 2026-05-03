@@ -141,6 +141,9 @@ class GroupFeedFragment : Fragment() {
     override fun onResume() {
         super.onResume()
         updateSessionButton()
+        if (groupId.isNotEmpty()) {
+            viewModel.startListeningToFeed(groupId)
+        }
     }
 
     fun updateSessionButton(forceInactive: Boolean = false) {
@@ -204,7 +207,7 @@ class GroupFeedFragment : Fragment() {
                         id = index + 1,
                         name = entry.name,
                         initials = entry.initials,
-                        hours = entry.hours,
+                        hours = entry.todayHours,
                         todayHours = entry.todayHours,
                         streak = entry.streak,
                         avatarColorHex = entry.avatarColorHex,

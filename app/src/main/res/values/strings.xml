@@ -15,9 +15,6 @@
     <string name="time_spent">Time Spent</string>
     <string name="add_note">What did you accomplish?</string>
     <string name="note_hint">Add a note...</string>
-    <string name="photo_proof">Add photo proof</string>
-    <string name="photo_points">Earn 2x streak points</string>
-    <string name="upload_photo">Tap to upload photo</string>
     <string name="leaderboard">Leaderboard</string>
     <string name="this_week">This Week</string>
     <string name="today">Today</string>

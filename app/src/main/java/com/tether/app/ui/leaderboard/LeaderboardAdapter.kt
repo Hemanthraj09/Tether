@@ -76,22 +76,25 @@ class LeaderboardAdapter(
             tvStreak.text = "${item.streak} ${context.getString(R.string.day_streak)}"
             tvHours.text = formatHours(item.hours)
 
-            if (item.isCurrentUser || groupId.isEmpty()) {
-                btnNudge.visibility = View.GONE
-            } else {
-                btnNudge.visibility = View.VISIBLE
-                if (item.hasNudgedToday) {
-                    btnNudge.text = "Nudged ✓"
-                    btnNudge.isEnabled = false
-                    btnNudge.alpha = 0.5f
-                } else {
-                    btnNudge.text = "⚡ Nudge"
-                    btnNudge.isEnabled = true
-                    btnNudge.alpha = 1.0f
-                    btnNudge.setOnClickListener {
+            if (!item.isCurrentUser && groupId.isNotEmpty()) {
+                flAvatar.setOnClickListener {
+                    if (!item.hasNudgedToday) {
                         onNudge(groupId, item.uid)
+                    } else {
+                        android.widget.Toast.makeText(
+                            context, "Already nudged today ✓", android.widget.Toast.LENGTH_SHORT
+                        ).show()
                     }
                 }
+                // Subtle ring to indicate tappable for other users
+                if (item.hasNudgedToday) {
+                    flAvatar.alpha = 0.5f
+                } else {
+                    flAvatar.alpha = 1.0f
+                }
+            } else {
+                flAvatar.setOnClickListener(null)
+                flAvatar.alpha = 1.0f
             }
 
             if (item.paceLabel.isNotEmpty()) {

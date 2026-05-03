@@ -76,6 +76,8 @@
         android:id="@+id/leaderboardFragment"
         android:name="com.tether.app.ui.leaderboard.LeaderboardFragment"
         android:label="Leaderboard"
+        app:popUpTo="@id/groupListFragment"
+        app:popUpToInclusive="false"
         tools:layout="@layout/fragment_leaderboard">
         <action
             android:id="@+id/action_leaderboard_to_home"
@@ -95,6 +97,8 @@
         android:id="@+id/profileFragment"
         android:name="com.tether.app.ui.profile.ProfileFragment"
         android:label="Profile"
+        app:popUpTo="@id/groupListFragment"
+        app:popUpToInclusive="false"
         tools:layout="@layout/fragment_profile">
         <action
             android:id="@+id/action_profile_to_home"

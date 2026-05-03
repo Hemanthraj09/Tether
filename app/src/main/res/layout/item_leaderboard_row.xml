@@ -27,6 +27,8 @@
         android:layout_height="48dp"
         android:layout_marginStart="8dp"
         android:background="@drawable/bg_avatar_circle"
+        android:clickable="true"
+        android:foreground="?attr/selectableItemBackground"
         app:layout_constraintBottom_toBottomOf="parent"
         app:layout_constraintStart_toEndOf="@id/tvRank"
         app:layout_constraintTop_toTopOf="parent">
@@ -124,19 +126,6 @@
         app:layout_constraintBottom_toBottomOf="parent"
         app:layout_constraintEnd_toEndOf="parent"
         app:layout_constraintTop_toTopOf="parent">
-
-        <com.google.android.material.button.MaterialButton
-            android:id="@+id/btnNudge"
-            style="@style/Widget.MaterialComponents.Button.OutlinedButton"
-            android:layout_width="wrap_content"
-            android:layout_height="32dp"
-            android:layout_marginEnd="12dp"
-            android:paddingHorizontal="10dp"
-            android:text="⚡ Nudge"
-            android:textColor="@color/colorAccent"
-            android:textSize="11sp"
-            app:cornerRadius="16dp"
-            app:strokeColor="@color/colorAccent" />
 
         <TextView
             android:id="@+id/tvHours"

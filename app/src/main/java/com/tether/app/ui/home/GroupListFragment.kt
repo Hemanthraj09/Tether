@@ -39,7 +39,6 @@ class GroupListFragment : Fragment() {
     ) {
         super.onViewCreated(view, savedInstanceState)
 
-        setupBottomNav()
         observeGroups()
         groupViewModel.loadUserGroups()
 
@@ -178,39 +177,6 @@ class GroupListFragment : Fragment() {
             }
             .setNegativeButton("Cancel", null)
             .show()
-    }
-
-    private fun setupBottomNav() {
-        binding.bottomNav.selectedItemId = R.id.nav_home
-
-        binding.bottomNav.setOnItemSelectedListener { item ->
-            when (item.itemId) {
-                R.id.nav_home -> true
-                R.id.nav_leaderboard -> {
-                    findNavController().navigate(
-                        R.id.leaderboardFragment,
-                        null,
-                        androidx.navigation.NavOptions.Builder()
-                            .setPopUpTo(R.id.groupListFragment, false)
-                            .setLaunchSingleTop(true)
-                            .build()
-                    )
-                    true
-                }
-                R.id.nav_profile -> {
-                    findNavController().navigate(
-                        R.id.profileFragment,
-                        null,
-                        androidx.navigation.NavOptions.Builder()
-                            .setPopUpTo(R.id.groupListFragment, false)
-                            .setLaunchSingleTop(true)
-                            .build()
-                    )
-                    true
-                }
-                else -> false
-            }
-        }
     }
 
     override fun onDestroyView() {

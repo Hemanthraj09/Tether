@@ -4,6 +4,7 @@ import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.tether.app.data.repository.LeaderboardEntry
 import com.tether.app.data.repository.LeaderboardRepository
+import kotlinx.coroutines.Job
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.launch
@@ -29,8 +30,11 @@ class LeaderboardViewModel : ViewModel() {
     val uiState: StateFlow<LeaderboardUiState> =
         _uiState
 
+    private var leaderboardJob: Job? = null
+
     fun loadLeaderboard(groupId: String) {
-        viewModelScope.launch {
+        leaderboardJob?.cancel()
+        leaderboardJob = viewModelScope.launch {
             _uiState.value = LeaderboardUiState.Loading
             repository.getLeaderboardFlow(groupId).collect { entries ->
                 _uiState.value = if (entries.isEmpty()) {

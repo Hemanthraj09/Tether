@@ -151,19 +151,4 @@
         </LinearLayout>
     </androidx.core.widget.NestedScrollView>
 
-    <com.google.android.material.bottomnavigation.BottomNavigationView
-        android:id="@+id/bottomNav"
-        android:layout_width="match_parent"
-        android:layout_height="wrap_content"
-        android:layout_gravity="bottom"
-        android:background="@color/colorSurface"
-        android:elevation="8dp"
-        android:paddingTop="8dp"
-        android:paddingBottom="8dp"
-        app:itemIconSize="20dp"
-        app:itemIconTint="@color/bottom_nav_color"
-        app:itemTextColor="@color/bottom_nav_color"
-        app:labelVisibilityMode="labeled"
-        app:menu="@menu/bottom_nav_menu" />
-
 </androidx.coordinatorlayout.widget.CoordinatorLayout>

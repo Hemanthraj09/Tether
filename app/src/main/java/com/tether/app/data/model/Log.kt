@@ -10,6 +10,5 @@ data class Log(
     val date: String = "",
     val value: Double = 0.0,
     val note: String = "",
-    val photoUrl: String = "",
     val createdAt: Long = 0L
 )

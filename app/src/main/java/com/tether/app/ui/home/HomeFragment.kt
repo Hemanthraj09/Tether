@@ -69,8 +69,6 @@ class HomeFragment : Fragment() {
             }
         })
 
-        setupBottomNavigation()
-
         binding.tvGroupName.text = ""
         binding.tvDot.visibility = View.GONE
         binding.tvDate.visibility = View.GONE
@@ -172,37 +170,6 @@ class HomeFragment : Fragment() {
     private fun setupHeader() {
         val dateFormat = SimpleDateFormat("MMM dd", Locale.getDefault())
         binding.tvDate.text = dateFormat.format(Date())
-    }
-
-    private fun setupBottomNavigation() {
-        binding.bottomNav.selectedItemId = R.id.nav_home
-        binding.bottomNav.setOnItemSelectedListener { item ->
-            when (item.itemId) {
-                R.id.nav_home -> {
-                    if (findNavController().currentDestination?.id != R.id.homeFragment) {
-                        val navOptions = NavOptions.Builder()
-                            .setPopUpTo(R.id.homeFragment, false)
-                            .setLaunchSingleTop(true)
-                            .build()
-                        findNavController().navigate(R.id.homeFragment, null, navOptions)
-                    }
-                    true
-                }
-                R.id.nav_leaderboard -> {
-                    if (findNavController().currentDestination?.id != R.id.leaderboardFragment) {
-                        findNavController().navigate(R.id.action_home_to_leaderboard)
-                    }
-                    true
-                }
-                R.id.nav_profile -> {
-                    if (findNavController().currentDestination?.id != R.id.profileFragment) {
-                        findNavController().navigate(R.id.action_home_to_profile)
-                    }
-                    true
-                }
-                else -> false
-            }
-        }
     }
 
     override fun onDestroyView() {

@@ -14,6 +14,7 @@ import com.tether.app.data.repository.AuthRepository
 import com.tether.app.databinding.ActivityMainBinding
 import com.google.firebase.auth.FirebaseAuth
 import com.google.firebase.firestore.FirebaseFirestore
+import android.view.View
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.tasks.await
 
@@ -22,6 +23,12 @@ class MainActivity : AppCompatActivity() {
     private lateinit var binding: ActivityMainBinding
     private lateinit var navController: NavController
     private var nudgeListener: com.google.firebase.firestore.ListenerRegistration? = null
+
+    private val requestPermissionsLauncher = registerForActivityResult(
+        androidx.activity.result.contract.ActivityResultContracts.RequestMultiplePermissions()
+    ) { permissions ->
+        // permissions granted or denied — no action needed, system handles it
+    }
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
@@ -33,6 +40,7 @@ class MainActivity : AppCompatActivity() {
         setupNavController()
         setupBackPress()
         startNudgeListener()
+        requestAppPermissions()
     }
 
     override fun onNewIntent(intent: Intent) {
@@ -87,6 +95,55 @@ class MainActivity : AppCompatActivity() {
             .findFragmentById(R.id.navHostFragment)
                 as NavHostFragment
         navController = navHostFragment.navController
+
+        binding.bottomNav.setOnItemSelectedListener { item ->
+            when (item.itemId) {
+                R.id.nav_home -> {
+                    navController.navigate(
+                        R.id.groupListFragment,
+                        null,
+                        androidx.navigation.NavOptions.Builder()
+                            .setPopUpTo(R.id.groupListFragment, true)
+                            .setLaunchSingleTop(true)
+                            .build()
+                    )
+                    true
+                }
+                R.id.nav_leaderboard -> {
+                    navController.navigate(
+                        R.id.leaderboardFragment,
+                        null,
+                        androidx.navigation.NavOptions.Builder()
+                            .setPopUpTo(R.id.groupListFragment, false)
+                            .setLaunchSingleTop(true)
+                            .build()
+                    )
+                    true
+                }
+                R.id.nav_profile -> {
+                    navController.navigate(
+                        R.id.profileFragment,
+                        null,
+                        androidx.navigation.NavOptions.Builder()
+                            .setPopUpTo(R.id.groupListFragment, false)
+                            .setLaunchSingleTop(true)
+                            .build()
+                    )
+                    true
+                }
+                else -> false
+            }
+        }
+
+        // Keep selected item in sync when navigating programmatically
+        navController.addOnDestinationChangedListener { _, destination, _ ->
+            val showNav = destination.id in listOf(
+                R.id.groupListFragment,
+                R.id.leaderboardFragment,
+                R.id.profileFragment
+            )
+            binding.bottomNav.visibility = if (showNav) View.VISIBLE else View.GONE
+        }
 
         val authRepository = AuthRepository()
         if (authRepository.isLoggedIn) {
@@ -175,6 +232,28 @@ class MainActivity : AppCompatActivity() {
 
         notificationManager.notify(
             System.currentTimeMillis().toInt(), notification)
+    }
+
+    private fun requestAppPermissions() {
+        val permissionsNeeded = mutableListOf<String>()
+
+        if (android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.TIRAMISU) {
+            if (androidx.core.content.ContextCompat.checkSelfPermission(
+                    this, android.Manifest.permission.POST_NOTIFICATIONS
+                ) != android.content.pm.PackageManager.PERMISSION_GRANTED) {
+                permissionsNeeded.add(android.Manifest.permission.POST_NOTIFICATIONS)
+            }
+        }
+
+        if (androidx.core.content.ContextCompat.checkSelfPermission(
+                this, android.Manifest.permission.CAMERA
+            ) != android.content.pm.PackageManager.PERMISSION_GRANTED) {
+            permissionsNeeded.add(android.Manifest.permission.CAMERA)
+        }
+
+        if (permissionsNeeded.isNotEmpty()) {
+            requestPermissionsLauncher.launch(permissionsNeeded.toTypedArray())
+        }
     }
 
     override fun onDestroy() {

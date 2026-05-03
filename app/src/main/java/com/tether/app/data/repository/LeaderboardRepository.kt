@@ -153,7 +153,7 @@ class LeaderboardRepository {
             val yesterdayHours = yesterdayStatsSnapshot?.getDouble(uid) ?: 0.0
 
             // Pace logic: only show if behind yesterday
-            val paceLabel = if (yesterdayHours > 0 && (todayHours - yesterdayHours) < -0.5) {
+            val paceLabel = if (yesterdayHours > 0.5 && todayHours < yesterdayHours) {
                 val diff = yesterdayHours - todayHours
                 val totalMins = (diff * 60).toInt()
                 val hrs = totalMins / 60
@@ -201,7 +201,7 @@ class LeaderboardRepository {
                 paceLabel = paceLabel,
                 hasNudgedToday = hasNudgedToday
             )
-        }.sortedByDescending { it.hours }
+        }.sortedByDescending { it.todayHours }
     }
 
     private fun getCurrentWeekKey(): String {

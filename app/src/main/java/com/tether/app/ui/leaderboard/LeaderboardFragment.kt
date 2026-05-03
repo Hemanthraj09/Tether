@@ -76,44 +76,14 @@ class LeaderboardFragment : Fragment() {
                     R.color.colorTextSecondary))
         }
 
-        binding.bottomNav.selectedItemId =
-            R.id.nav_leaderboard
-
         observeLeaderboard()
         loadLeaderboardForUserGroup()
+    }
 
-        binding.bottomNav.setOnItemSelectedListener {
-            item ->
-            when (item.itemId) {
-                R.id.nav_home -> {
-                    findNavController().navigate(
-                        R.id.groupListFragment,
-                        null,
-                        androidx.navigation.NavOptions
-                            .Builder()
-                            .setPopUpTo(R.id.groupListFragment,
-                                true)
-                            .setLaunchSingleTop(true)
-                            .build()
-                    )
-                    true
-                }
-                R.id.nav_leaderboard -> true
-                R.id.nav_profile -> {
-                    findNavController().navigate(
-                        R.id.action_leaderboard_to_profile,
-                        null,
-                        androidx.navigation.NavOptions
-                            .Builder()
-                            .setPopUpTo(R.id.groupListFragment,
-                                false)
-                            .setLaunchSingleTop(true)
-                            .build()
-                    )
-                    true
-                }
-                else -> false
-            }
+    override fun onResume() {
+        super.onResume()
+        if (currentGroupId.isNotEmpty()) {
+            viewModel.loadLeaderboard(currentGroupId)
         }
     }
 
@@ -162,7 +132,7 @@ class LeaderboardFragment : Fragment() {
                                     id = index + 1,
                                     name = entry.name,
                                     initials = entry.initials,
-                                    hours = entry.hours,
+                                    hours = entry.todayHours,
                                     streak = entry.streak,
                                     avatarColorHex = entry.avatarColorHex,
                                     isCurrentUser = entry.isCurrentUser,

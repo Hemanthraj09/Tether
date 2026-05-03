@@ -7,6 +7,7 @@ import com.tether.app.data.repository.GroupManagementRepository
 import com.tether.app.data.repository.LeaderboardEntry
 import com.tether.app.data.repository.LeaderboardRepository
 import com.tether.app.data.repository.LogRepository
+import kotlinx.coroutines.Job
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.launch
@@ -46,16 +47,22 @@ class GroupFeedViewModel : ViewModel() {
     private val _isCreator = MutableStateFlow(false)
     val isCreator: StateFlow<Boolean> = _isCreator
 
+    private var feedJob: Job? = null
+    private var statsJob: Job? = null
+
     fun startListeningToFeed(groupId: String) {
-        viewModelScope.launch {
+        feedJob?.cancel()
+        statsJob?.cancel()
+
+        feedJob = viewModelScope.launch {
             logRepository
                 .getTodayLogsForGroup(groupId)
                 .collect { logs ->
                     _feedLogs.value = logs
                 }
         }
-        
-        viewModelScope.launch {
+
+        statsJob = viewModelScope.launch {
             leaderboardRepository
                 .getLeaderboardFlow(groupId)
                 .collect { stats ->

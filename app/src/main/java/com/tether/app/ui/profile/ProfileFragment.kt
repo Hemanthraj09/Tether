@@ -39,7 +39,6 @@ class ProfileFragment : Fragment() {
         super.onViewCreated(view, savedInstanceState)
 
         loadUserData()
-        setupBottomNav()
 
         binding.btnLogout.setOnClickListener {
             com.tether.app.data.repository.AuthRepository().logout()
@@ -295,39 +294,6 @@ class ProfileFragment : Fragment() {
 
         scrollView.addView(tableLayout)
         container.addView(scrollView)
-    }
-
-    private fun setupBottomNav() {
-        binding.bottomNav.selectedItemId = R.id.nav_profile
-
-        binding.bottomNav.setOnItemSelectedListener { item ->
-            when (item.itemId) {
-                R.id.nav_home -> {
-                    findNavController().navigate(
-                        R.id.groupListFragment,
-                        null,
-                        androidx.navigation.NavOptions.Builder()
-                            .setPopUpTo(R.id.groupListFragment, true)
-                            .setLaunchSingleTop(true)
-                            .build()
-                    )
-                    true
-                }
-                R.id.nav_leaderboard -> {
-                    findNavController().navigate(
-                        R.id.leaderboardFragment,
-                        null,
-                        androidx.navigation.NavOptions.Builder()
-                            .setPopUpTo(R.id.groupListFragment, false)
-                            .setLaunchSingleTop(true)
-                            .build()
-                    )
-                    true
-                }
-                R.id.nav_profile -> true
-                else -> false
-            }
-        }
     }
 
     override fun onDestroyView() {

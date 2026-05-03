@@ -82,36 +82,24 @@ class LogBottomSheetFragment : BottomSheetDialogFragment() {
             }
         }
 
-        binding.switchPhoto.setOnCheckedChangeListener { _, isChecked ->
-            binding.layoutPhotoUpload.visibility =
-                if (isChecked) View.VISIBLE else View.GONE
-        }
-
         binding.btnClose.setOnClickListener {
             dismiss()
         }
 
         binding.btnLogIt.setOnClickListener {
             if (currentHours == 0 && currentMinutes == 0) {
-                TetherToast.show(
-                    requireContext(),
-                    "Please log at least 5 minutes",
-                    isError = true
-                )
+                TetherToast.show(requireContext(), "Please log at least 5 minutes", isError = true)
                 return@setOnClickListener
             }
             val totalHours = currentHours + (currentMinutes / 60.0)
             val note = binding.etNote.text.toString().trim()
-            viewModel.writeLog(groupId, totalHours, note)
             val timeStr = when {
                 currentHours == 0 -> "${currentMinutes}m"
                 currentMinutes == 0 -> "${currentHours}h"
                 else -> "${currentHours}h ${currentMinutes}m"
             }
-            TetherToast.show(
-                requireContext(),
-                "Logged $timeStr! Keep it up 🔥"
-            )
+            viewModel.writeLog(groupId, totalHours, note)
+            TetherToast.show(requireContext(), "Logged $timeStr! Keep it up 🔥")
             dismiss()
         }
     }
