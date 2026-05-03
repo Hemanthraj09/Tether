@@ -10,12 +10,26 @@ import androidx.recyclerview.widget.RecyclerView
 import com.tether.app.R
 import com.tether.app.databinding.ItemLeaderboardRowBinding
 
-class LeaderboardAdapter(private var items: List<LeaderboardItem>) :
+class LeaderboardAdapter(
+    private val groupId: String,
+    private var items: List<LeaderboardItem>,
+    private val onNudge: (String, String) -> Unit
+) :
     RecyclerView.Adapter<LeaderboardAdapter.LeaderboardViewHolder>() {
 
     fun updateItems(newItems: List<LeaderboardItem>) {
         items = newItems
         notifyDataSetChanged()
+    }
+
+    fun markNudged(nudgedUid: String) {
+        val index = items.indexOfFirst { it.uid == nudgedUid }
+        if (index != -1) {
+            items = items.toMutableList().also {
+                it[index] = it[index].copy(hasNudgedToday = true)
+            }
+            notifyItemChanged(index)
+        }
     }
 
     class LeaderboardViewHolder(val binding: ItemLeaderboardRowBinding) :
@@ -61,6 +75,24 @@ class LeaderboardAdapter(private var items: List<LeaderboardItem>) :
 
             tvStreak.text = "${item.streak} ${context.getString(R.string.day_streak)}"
             tvHours.text = formatHours(item.hours)
+
+            if (item.isCurrentUser || groupId.isEmpty()) {
+                btnNudge.visibility = View.GONE
+            } else {
+                btnNudge.visibility = View.VISIBLE
+                if (item.hasNudgedToday) {
+                    btnNudge.text = "Nudged ✓"
+                    btnNudge.isEnabled = false
+                    btnNudge.alpha = 0.5f
+                } else {
+                    btnNudge.text = "⚡ Nudge"
+                    btnNudge.isEnabled = true
+                    btnNudge.alpha = 1.0f
+                    btnNudge.setOnClickListener {
+                        onNudge(groupId, item.uid)
+                    }
+                }
+            }
 
             if (item.paceLabel.isNotEmpty()) {
                 tvPaceLabel.visibility = View.VISIBLE

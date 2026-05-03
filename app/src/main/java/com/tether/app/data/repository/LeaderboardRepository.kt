@@ -152,36 +152,15 @@ class LeaderboardRepository {
             val todayHours = todayStatsSnapshot?.getDouble(uid) ?: 0.0
             val yesterdayHours = yesterdayStatsSnapshot?.getDouble(uid) ?: 0.0
 
-            // Calculate group average for today (exclude this member)
-            val otherMemberHours = group.members
-                .filter { it != uid }
-                .map { todayStatsSnapshot?.getDouble(it) ?: 0.0 }
-            val groupAvgToday = if (otherMemberHours.isEmpty()) 0.0
-            else otherMemberHours.average()
-
-            // Pace logic: only show if behind
-            val paceDiff = todayHours - yesterdayHours
-            val avgDiff = todayHours - groupAvgToday
-
-            val paceLabel = when {
-                yesterdayHours > 0 && paceDiff < -0.5 -> {
-                    val h = Math.abs(paceDiff)
-                    val totalMins = (h * 60).toInt()
-                    val hrs = totalMins / 60
-                    val mins = totalMins % 60
-                    if (hrs > 0) "${hrs}h ${mins}m less than yesterday"
-                    else "${mins}m less than yesterday"
-                }
-                otherMemberHours.isNotEmpty() && avgDiff < -0.5 -> {
-                    val h = Math.abs(avgDiff)
-                    val totalMins = (h * 60).toInt()
-                    val hrs = totalMins / 60
-                    val mins = totalMins % 60
-                    if (hrs > 0) "${hrs}h ${mins}m below group avg"
-                    else "${mins}m below group avg"
-                }
-                else -> ""
-            }
+            // Pace logic: only show if behind yesterday
+            val paceLabel = if (yesterdayHours > 0 && (todayHours - yesterdayHours) < -0.5) {
+                val diff = yesterdayHours - todayHours
+                val totalMins = (diff * 60).toInt()
+                val hrs = totalMins / 60
+                val mins = totalMins % 60
+                if (hrs > 0) "${hrs}h ${mins}m behind yesterday"
+                else "${mins}m behind yesterday"
+            } else ""
 
             val initials = name
                 .split(" ")
@@ -201,6 +180,15 @@ class LeaderboardRepository {
                 uid.hashCode().and(0x7fffffff)
                     .rem(avatarColors.size)]
 
+            val hasNudgedToday = try {
+                val nudgeKey = "${currentUid}_$uid"
+                firestore.collection("nudges")
+                    .document(groupId)
+                    .collection(today)
+                    .document(nudgeKey)
+                    .get().await().exists()
+            } catch (e: Exception) { false }
+
             LeaderboardEntry(
                 uid = uid,
                 name = name,
@@ -210,7 +198,8 @@ class LeaderboardRepository {
                 streak = streak,
                 avatarColorHex = avatarColor,
                 isCurrentUser = uid == currentUid,
-                paceLabel = paceLabel
+                paceLabel = paceLabel,
+                hasNudgedToday = hasNudgedToday
             )
         }.sortedByDescending { it.hours }
     }
@@ -232,5 +221,6 @@ data class LeaderboardEntry(
     val streak: Int,
     val avatarColorHex: String,
     val isCurrentUser: Boolean,
-    val paceLabel: String = ""
+    val paceLabel: String = "",
+    val hasNudgedToday: Boolean = false
 )

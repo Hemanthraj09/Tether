@@ -9,5 +9,7 @@ data class LeaderboardItem(
     val streak: Int,
     val avatarColorHex: String,
     val isCurrentUser: Boolean,
-    val paceLabel: String = ""
+    val paceLabel: String = "",
+    val uid: String = "",
+    val hasNudgedToday: Boolean = false
 )

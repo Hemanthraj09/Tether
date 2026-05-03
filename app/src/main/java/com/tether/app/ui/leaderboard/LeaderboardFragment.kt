@@ -41,7 +41,7 @@ class LeaderboardFragment : Fragment() {
         binding.leaderboardRecyclerView.layoutManager =
             LinearLayoutManager(requireContext())
         binding.leaderboardRecyclerView.adapter =
-            LeaderboardAdapter(emptyList())
+            LeaderboardAdapter(currentGroupId, emptyList()) { _, _ -> }
 
         binding.btnWeekly.background =
             ContextCompat.getDrawable(requireContext(),
@@ -164,15 +164,15 @@ class LeaderboardFragment : Fragment() {
                                     initials = entry.initials,
                                     hours = entry.hours,
                                     streak = entry.streak,
-                                    avatarColorHex =
-                                    entry.avatarColorHex,
-                                    isCurrentUser =
-                                    entry.isCurrentUser
+                                    avatarColorHex = entry.avatarColorHex,
+                                    isCurrentUser = entry.isCurrentUser,
+                                    uid = entry.uid,
+                                    hasNudgedToday = false
                                 )
                             }
                         val adapter = binding.leaderboardRecyclerView.adapter as? LeaderboardAdapter
                         if (adapter == null) {
-                            binding.leaderboardRecyclerView.adapter = LeaderboardAdapter(items)
+                            binding.leaderboardRecyclerView.adapter = LeaderboardAdapter(currentGroupId, items) { _, _ -> }
                         } else {
                             adapter.updateItems(items)
                         }
@@ -180,7 +180,7 @@ class LeaderboardFragment : Fragment() {
                     is LeaderboardUiState.Empty -> {
                         val adapter = binding.leaderboardRecyclerView.adapter as? LeaderboardAdapter
                         if (adapter == null) {
-                            binding.leaderboardRecyclerView.adapter = LeaderboardAdapter(emptyList())
+                            binding.leaderboardRecyclerView.adapter = LeaderboardAdapter(currentGroupId, emptyList()) { _, _ -> }
                         } else {
                             adapter.updateItems(emptyList())
                         }

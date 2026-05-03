@@ -93,8 +93,8 @@ class ProfileFragment : Fragment() {
                     .uppercase()
                     .takeIf { it.isNotEmpty() } ?: "U"
 
-                val today = SimpleDateFormat("yyyy-MM-dd",
-                    Locale.getDefault()).format(Date())
+                // Calculate today's hours instead of all-time
+                val today = SimpleDateFormat("yyyy-MM-dd", Locale.getDefault()).format(Date())
                 val todayLogs = FirebaseFirestore.getInstance()
                     .collection("logs")
                     .whereEqualTo("userId", uid)
@@ -104,14 +104,30 @@ class ProfileFragment : Fragment() {
                 val todayHours = todayLogs.documents
                     .sumOf { it.getDouble("value") ?: 0.0 }
 
-                val currentStreak = userDoc.getLong("currentStreak")?.toInt() ?: 0
+                // Find highest streak across all user's groups
+                val groupIds = (userDoc.get("groupIds") as? List<*>)?.mapNotNull { it as? String } ?: emptyList()
+                var highestStreak = 0
+                groupIds.forEach { gid ->
+                    try {
+                        val streakDoc = FirebaseFirestore.getInstance()
+                            .collection("groupStats")
+                            .document(gid)
+                            .collection("streaks")
+                            .document(uid)
+                            .get().await()
+                        val streak = streakDoc.getLong("currentStreak")?.toInt() ?: 0
+                        if (streak > highestStreak) highestStreak = streak
+                    } catch (e: Exception) {
+                        // skip this group if fetch fails, continue with others
+                    }
+                }
 
                 binding.tvProfileName.text = name
                 binding.tvProfileEmail.text = email
                 binding.tvProfileInitials.text = initials
-                binding.tvStreakCount.text = currentStreak.toString()
+                binding.tvStreakCount.text = highestStreak.toString()
                 binding.tvTotalHours.text = formatHours(todayHours)
-                binding.tvGroupCount.text = (userDoc.get("groupIds") as? List<*>)?.size?.toString() ?: "0"
+                binding.tvGroupCount.text = groupIds.size.toString()
 
                 loadHeatmapData(uid)
 

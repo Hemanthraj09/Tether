@@ -12,6 +12,8 @@ import androidx.navigation.findNavController
 import androidx.navigation.fragment.NavHostFragment
 import com.tether.app.data.repository.AuthRepository
 import com.tether.app.databinding.ActivityMainBinding
+import com.google.firebase.auth.FirebaseAuth
+import com.google.firebase.firestore.FirebaseFirestore
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.tasks.await
 
@@ -19,6 +21,7 @@ class MainActivity : AppCompatActivity() {
 
     private lateinit var binding: ActivityMainBinding
     private lateinit var navController: NavController
+    private var nudgeListener: com.google.firebase.firestore.ListenerRegistration? = null
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
@@ -29,6 +32,7 @@ class MainActivity : AppCompatActivity() {
         setupWindowDecor()
         setupNavController()
         setupBackPress()
+        startNudgeListener()
     }
 
     override fun onNewIntent(intent: Intent) {
@@ -124,5 +128,57 @@ class MainActivity : AppCompatActivity() {
                 }
             }
         )
+    }
+
+    private fun startNudgeListener() {
+        val uid = FirebaseAuth.getInstance().currentUser?.uid ?: return
+        
+        nudgeListener = FirebaseFirestore.getInstance()
+            .collectionGroup("nudges")
+            .whereEqualTo("nudgedUid", uid)
+            .whereGreaterThan("timestamp",
+                System.currentTimeMillis() - 5000)
+            .addSnapshotListener { snapshot, _ ->
+                snapshot?.documentChanges?.forEach { change ->
+                    if (change.type ==
+                        com.google.firebase.firestore.DocumentChange.Type.ADDED) {
+                        val nudgerName = change.document
+                            .getString("nudgerName") ?: "Someone"
+                        showNudgeNotification(nudgerName)
+                    }
+                }
+            }
+    }
+
+    private fun showNudgeNotification(nudgerName: String) {
+        val channelId = "nudge_channel"
+        val notificationManager = getSystemService(
+            android.content.Context.NOTIFICATION_SERVICE)
+            as android.app.NotificationManager
+
+        if (android.os.Build.VERSION.SDK_INT >=
+            android.os.Build.VERSION_CODES.O) {
+            val channel = android.app.NotificationChannel(
+                channelId, "Nudges",
+                android.app.NotificationManager.IMPORTANCE_HIGH
+            )
+            notificationManager.createNotificationChannel(channel)
+        }
+
+        val notification = androidx.core.app.NotificationCompat
+            .Builder(this, channelId)
+            .setContentTitle("⚡ You got nudged!")
+            .setContentText("$nudgerName nudged you! Time to get back on track.")
+            .setSmallIcon(R.drawable.ic_flame)
+            .setAutoCancel(true)
+            .build()
+
+        notificationManager.notify(
+            System.currentTimeMillis().toInt(), notification)
+    }
+
+    override fun onDestroy() {
+        super.onDestroy()
+        nudgeListener?.remove()
     }
 }

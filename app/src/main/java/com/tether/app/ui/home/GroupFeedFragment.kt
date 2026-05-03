@@ -209,13 +209,30 @@ class GroupFeedFragment : Fragment() {
                         streak = entry.streak,
                         avatarColorHex = entry.avatarColorHex,
                         isCurrentUser = entry.isCurrentUser,
-                        paceLabel = entry.paceLabel
+                        paceLabel = entry.paceLabel,
+                        uid = entry.uid,
+                        hasNudgedToday = entry.hasNudgedToday
                     )
                 }
                 
                 val adapter = binding.membersRecyclerView.adapter as? LeaderboardAdapter
                 if (adapter == null) {
-                    binding.membersRecyclerView.adapter = LeaderboardAdapter(items)
+                    binding.membersRecyclerView.adapter = LeaderboardAdapter(groupId, items) { gid, nudgedUid ->
+                        viewLifecycleOwner.lifecycleScope.launch {
+                            val repo = com.tether.app.data.repository.NudgeRepository()
+                            val result = repo.sendNudge(gid, nudgedUid)
+                            if (result.isSuccess) {
+                                TetherToast.show(requireContext(), "Nudge sent! ⚡")
+                                // Immediately update the item locally
+                                val currentAdapter = binding.membersRecyclerView.adapter as? LeaderboardAdapter
+                                currentAdapter?.markNudged(nudgedUid)
+                            } else {
+                                TetherToast.show(requireContext(),
+                                    result.exceptionOrNull()?.message ?: "Already nudged today",
+                                    isError = true)
+                            }
+                        }
+                    }
                 } else {
                     adapter.updateItems(items)
                 }
