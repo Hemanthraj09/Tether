@@ -115,7 +115,33 @@
         <action
             android:id="@+id/action_profile_to_group"
             app:destination="@id/groupFragment" />
+        <action
+            android:id="@+id/action_profile_to_about"
+            app:destination="@id/aboutFragment"
+            app:enterAnim="@anim/slide_in_right"
+            app:exitAnim="@anim/slide_out_left"
+            app:popEnterAnim="@anim/slide_in_left"
+            app:popExitAnim="@anim/slide_out_right" />
+        <action
+            android:id="@+id/action_profile_to_faq"
+            app:destination="@id/faqFragment"
+            app:enterAnim="@anim/slide_in_right"
+            app:exitAnim="@anim/slide_out_left"
+            app:popEnterAnim="@anim/slide_in_left"
+            app:popExitAnim="@anim/slide_out_right" />
     </fragment>
+
+    <fragment
+        android:id="@+id/aboutFragment"
+        android:name="com.tether.app.ui.profile.AboutFragment"
+        android:label="About"
+        tools:layout="@layout/fragment_about" />
+
+    <fragment
+        android:id="@+id/faqFragment"
+        android:name="com.tether.app.ui.profile.FaqFragment"
+        android:label="FAQ"
+        tools:layout="@layout/fragment_faq" />
 
     <fragment
         android:id="@+id/groupFragment"

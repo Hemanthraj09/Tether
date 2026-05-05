@@ -40,6 +40,13 @@ class ProfileFragment : Fragment() {
 
         loadUserData()
 
+        binding.btnAbout.setOnClickListener {
+            findNavController().navigate(R.id.action_profile_to_about)
+        }
+        binding.btnFaq.setOnClickListener {
+            findNavController().navigate(R.id.action_profile_to_faq)
+        }
+
         binding.btnLogout.setOnClickListener {
             com.tether.app.data.repository.AuthRepository().logout()
             TetherToast.show(

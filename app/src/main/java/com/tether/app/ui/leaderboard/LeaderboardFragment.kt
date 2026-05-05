@@ -21,6 +21,8 @@ class LeaderboardFragment : Fragment() {
     private val binding get() = _binding!!
     private val viewModel: LeaderboardViewModel by viewModels()
     private var currentGroupId: String = ""
+    private var isWeeklyMode = true
+    private var currentEntries: List<com.tether.app.data.repository.LeaderboardEntry> = emptyList()
 
     override fun onCreateView(
         inflater: LayoutInflater,
@@ -51,6 +53,7 @@ class LeaderboardFragment : Fragment() {
                 R.color.colorTextPrimary))
 
         binding.btnWeekly.setOnClickListener {
+            isWeeklyMode = true
             binding.btnWeekly.background =
                 ContextCompat.getDrawable(requireContext(),
                     R.drawable.bg_toggle_active)
@@ -61,9 +64,11 @@ class LeaderboardFragment : Fragment() {
             binding.btnToday.setTextColor(
                 ContextCompat.getColor(requireContext(),
                     R.color.colorTextSecondary))
+            renderEntries(currentEntries)
         }
 
         binding.btnToday.setOnClickListener {
+            isWeeklyMode = false
             binding.btnToday.background =
                 ContextCompat.getDrawable(requireContext(),
                     R.drawable.bg_toggle_active)
@@ -74,6 +79,7 @@ class LeaderboardFragment : Fragment() {
             binding.btnWeekly.setTextColor(
                 ContextCompat.getColor(requireContext(),
                     R.color.colorTextSecondary))
+            renderEntries(currentEntries)
         }
 
         observeLeaderboard()
@@ -118,6 +124,35 @@ class LeaderboardFragment : Fragment() {
         }
     }
 
+    private fun renderEntries(entries: List<com.tether.app.data.repository.LeaderboardEntry>) {
+        currentEntries = entries
+        val sorted = if (isWeeklyMode) {
+            entries.sortedByDescending { it.hours }
+        } else {
+            entries.sortedByDescending { it.todayHours }
+        }
+        val items = sorted.mapIndexed { index, entry ->
+            LeaderboardItem(
+                id = index + 1,
+                name = entry.name,
+                initials = entry.initials,
+                hours = if (isWeeklyMode) entry.hours else entry.todayHours,
+                streak = entry.streak,
+                avatarColorHex = entry.avatarColorHex,
+                isCurrentUser = entry.isCurrentUser,
+                uid = entry.uid,
+                hasNudgedToday = entry.hasNudgedToday,
+                paceLabel = if (isWeeklyMode) "" else entry.paceLabel
+            )
+        }
+        val adapter = binding.leaderboardRecyclerView.adapter as? LeaderboardAdapter
+        if (adapter == null) {
+            binding.leaderboardRecyclerView.adapter = LeaderboardAdapter(currentGroupId, items) { _, _ -> }
+        } else {
+            adapter.updateItems(items)
+        }
+    }
+
     private fun observeLeaderboard() {
         viewLifecycleOwner.lifecycleScope.launch {
             viewModel.uiState.collect { state ->
@@ -126,26 +161,7 @@ class LeaderboardFragment : Fragment() {
                         // keep showing existing list
                     }
                     is LeaderboardUiState.Success -> {
-                        val items = state.entries
-                            .mapIndexed { index, entry ->
-                                LeaderboardItem(
-                                    id = index + 1,
-                                    name = entry.name,
-                                    initials = entry.initials,
-                                    hours = entry.todayHours,
-                                    streak = entry.streak,
-                                    avatarColorHex = entry.avatarColorHex,
-                                    isCurrentUser = entry.isCurrentUser,
-                                    uid = entry.uid,
-                                    hasNudgedToday = false
-                                )
-                            }
-                        val adapter = binding.leaderboardRecyclerView.adapter as? LeaderboardAdapter
-                        if (adapter == null) {
-                            binding.leaderboardRecyclerView.adapter = LeaderboardAdapter(currentGroupId, items) { _, _ -> }
-                        } else {
-                            adapter.updateItems(items)
-                        }
+                        renderEntries(state.entries)
                     }
                     is LeaderboardUiState.Empty -> {
                         val adapter = binding.leaderboardRecyclerView.adapter as? LeaderboardAdapter
