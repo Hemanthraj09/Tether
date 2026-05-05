@@ -235,24 +235,14 @@ class MainActivity : AppCompatActivity() {
     }
 
     private fun requestAppPermissions() {
-        val permissionsNeeded = mutableListOf<String>()
-
         if (android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.TIRAMISU) {
             if (androidx.core.content.ContextCompat.checkSelfPermission(
                     this, android.Manifest.permission.POST_NOTIFICATIONS
                 ) != android.content.pm.PackageManager.PERMISSION_GRANTED) {
-                permissionsNeeded.add(android.Manifest.permission.POST_NOTIFICATIONS)
+                requestPermissionsLauncher.launch(
+                    arrayOf(android.Manifest.permission.POST_NOTIFICATIONS)
+                )
             }
-        }
-
-        if (androidx.core.content.ContextCompat.checkSelfPermission(
-                this, android.Manifest.permission.CAMERA
-            ) != android.content.pm.PackageManager.PERMISSION_GRANTED) {
-            permissionsNeeded.add(android.Manifest.permission.CAMERA)
-        }
-
-        if (permissionsNeeded.isNotEmpty()) {
-            requestPermissionsLauncher.launch(permissionsNeeded.toTypedArray())
         }
     }
 

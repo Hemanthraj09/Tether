@@ -1,5 +1,6 @@
 package com.tether.app.ui.auth
 
+import android.app.Activity
 import android.os.Bundle
 import android.text.Spannable
 import android.text.SpannableString
@@ -7,11 +8,15 @@ import android.text.style.ForegroundColorSpan
 import android.view.LayoutInflater
 import android.view.View
 import android.view.ViewGroup
+import androidx.activity.result.contract.ActivityResultContracts
 import androidx.core.content.ContextCompat
 import androidx.fragment.app.Fragment
 import androidx.fragment.app.viewModels
 import androidx.lifecycle.lifecycleScope
 import androidx.navigation.fragment.findNavController
+import com.google.android.gms.auth.api.signin.GoogleSignIn
+import com.google.android.gms.auth.api.signin.GoogleSignInOptions
+import com.google.android.gms.common.api.ApiException
 import com.tether.app.R
 import com.tether.app.databinding.FragmentAuthBinding
 import com.tether.app.utils.TetherToast
@@ -23,6 +28,20 @@ class AuthFragment : Fragment() {
     private val binding get() = _binding!!
     private val viewModel: AuthViewModel by viewModels()
     private var isLoginMode = true
+
+    private val googleSignInLauncher = registerForActivityResult(
+        ActivityResultContracts.StartActivityForResult()
+    ) { result ->
+        if (result.resultCode == Activity.RESULT_OK) {
+            val task = GoogleSignIn.getSignedInAccountFromIntent(result.data)
+            try {
+                val account = task.getResult(ApiException::class.java)
+                viewModel.googleSignIn(account)
+            } catch (e: ApiException) {
+                TetherToast.show(requireContext(), "Google Sign-In failed: ${e.message}", isError = true)
+            }
+        }
+    }
 
     override fun onCreateView(
         inflater: LayoutInflater,
@@ -60,6 +79,17 @@ class AuthFragment : Fragment() {
 
         binding.btnAuthPrimary.setOnClickListener {
             handleAuthAction()
+        }
+
+        binding.btnGoogleSignIn.setOnClickListener {
+            val gso = GoogleSignInOptions.Builder(GoogleSignInOptions.DEFAULT_SIGN_IN)
+                .requestIdToken("366358693072-aa8dtre16eq1irhjt17ooesti2fls52u.apps.googleusercontent.com")
+                .requestEmail()
+                .build()
+            val googleSignInClient = GoogleSignIn.getClient(requireActivity(), gso)
+            googleSignInClient.signOut().addOnCompleteListener {
+                googleSignInLauncher.launch(googleSignInClient.signInIntent)
+            }
         }
     }
 

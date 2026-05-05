@@ -2,6 +2,7 @@ package com.tether.app.data.repository
 
 import com.google.firebase.auth.FirebaseAuth
 import com.google.firebase.auth.FirebaseUser
+import com.google.firebase.auth.GoogleAuthProvider
 import com.google.firebase.auth.UserProfileChangeRequest
 import com.google.firebase.firestore.FirebaseFirestore
 import com.tether.app.data.model.User
@@ -75,5 +76,31 @@ class AuthRepository {
 
     fun logout() {
         auth.signOut()
+    }
+
+    suspend fun googleSignIn(account: com.google.android.gms.auth.api.signin.GoogleSignInAccount): Result<Unit> {
+        return try {
+            val credential = com.google.firebase.auth.GoogleAuthProvider.getCredential(account.idToken, null)
+            val result = auth.signInWithCredential(credential).await()
+            val user = result.user ?: throw Exception("Sign-in failed")
+
+            // Create user doc if new user
+            val userDoc = firestore.collection("users").document(user.uid).get().await()
+            if (!userDoc.exists()) {
+                val name = account.displayName ?: account.email?.substringBefore("@") ?: "User"
+                firestore.collection("users").document(user.uid).set(
+                    mapOf(
+                        "uid" to user.uid,
+                        "name" to name,
+                        "email" to (account.email ?: ""),
+                        "groupIds" to emptyList<String>(),
+                        "totalHours" to 0.0
+                    )
+                ).await()
+            }
+            Result.success(Unit)
+        } catch (e: Exception) {
+            Result.failure(e)
+        }
     }
 }

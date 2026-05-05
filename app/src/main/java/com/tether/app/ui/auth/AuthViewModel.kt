@@ -3,6 +3,8 @@ package com.tether.app.ui.auth
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.tether.app.data.repository.AuthRepository
+import com.google.android.gms.auth.api.signin.GoogleSignInAccount
+import com.google.firebase.auth.GoogleAuthProvider
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.launch
@@ -59,6 +61,17 @@ class AuthViewModel : ViewModel() {
                         ?: "Signup failed"
                 )
             }
+        }
+    }
+
+    fun googleSignIn(account: GoogleSignInAccount) {
+        viewModelScope.launch {
+            _authState.value = AuthState.Loading
+            val result = repository.googleSignIn(account)
+            _authState.value = if (result.isSuccess)
+                AuthState.Success
+            else
+                AuthState.Error(result.exceptionOrNull()?.message ?: "Google Sign-In failed")
         }
     }
 
