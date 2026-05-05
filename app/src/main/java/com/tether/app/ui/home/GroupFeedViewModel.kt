@@ -58,7 +58,11 @@ class GroupFeedViewModel : ViewModel() {
             logRepository
                 .getTodayLogsForGroup(groupId)
                 .collect { logs ->
-                    _feedLogs.value = logs
+                    try {
+                        _feedLogs.value = logs
+                    } catch (e: Exception) {
+                        android.util.Log.e("TetherDebug", "Error in feedLogs collect: ${e.message}", e)
+                    }
                 }
         }
 
@@ -66,7 +70,11 @@ class GroupFeedViewModel : ViewModel() {
             leaderboardRepository
                 .getLeaderboardFlow(groupId)
                 .collect { stats ->
-                    _memberStats.value = stats
+                    try {
+                        _memberStats.value = stats
+                    } catch (e: Exception) {
+                        android.util.Log.e("TetherDebug", "Error in memberStats collect: ${e.message}", e)
+                    }
                 }
         }
     }

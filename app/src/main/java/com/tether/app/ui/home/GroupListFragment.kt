@@ -192,6 +192,7 @@ class GroupListFragment : Fragment() {
     }
 
     private fun updateBellDot() {
+        if (_binding == null) return
         val hasUnread = NotificationStore.hasUnread(requireContext())
         // Show/hide orange dot overlay on bell
         binding.notifDot.visibility = if (hasUnread) View.VISIBLE else View.GONE
@@ -227,6 +228,7 @@ class GroupListFragment : Fragment() {
         val currentUid = com.google.firebase.auth.FirebaseAuth.getInstance().currentUser?.uid ?: return
         val firestore = com.google.firebase.firestore.FirebaseFirestore.getInstance()
         val today = java.text.SimpleDateFormat("yyyy-MM-dd", java.util.Locale.getDefault()).format(java.util.Date())
+        val listenerStartTime = System.currentTimeMillis()
 
         viewLifecycleOwner.lifecycleScope.launch {
             groupViewModel.userGroupsState.collect { state ->
@@ -238,6 +240,9 @@ class GroupListFragment : Fragment() {
                             .addSnapshotListener { snapshot, _ ->
                                 snapshot?.documentChanges?.forEach { change ->
                                     if (change.type == com.google.firebase.firestore.DocumentChange.Type.ADDED) {
+                                        val logCreatedAt = change.document.getLong("createdAt") ?: 0L
+                                        if (logCreatedAt <= listenerStartTime) return@forEach
+
                                         val logUid = change.document.getString("userId") ?: ""
                                         if (logUid != currentUid) {
                                             val userName = change.document.getString("userName") ?: "Someone"
@@ -251,8 +256,14 @@ class GroupListFragment : Fragment() {
                                                 else -> "${h}h ${m}m"
                                             }
                                             val message = "$userName logged $hoursStr in ${group.name}"
+                                            
+                                            if (!isAdded || _binding == null) return@forEach
+
                                             NotificationStore.addNotification(requireContext(), message)
-                                            activity?.runOnUiThread { updateBellDot() }
+                                            activity?.runOnUiThread {
+                                                if (!isAdded || _binding == null) return@runOnUiThread
+                                                updateBellDot()
+                                            }
                                         }
                                     }
                                 }

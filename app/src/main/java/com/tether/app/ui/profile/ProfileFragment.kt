@@ -80,6 +80,7 @@ class ProfileFragment : Fragment() {
         val email = FirebaseAuth.getInstance().currentUser?.email ?: ""
 
         viewLifecycleOwner.lifecycleScope.launch {
+            if (_binding == null) return@launch
             try {
                 val userDoc = FirebaseFirestore.getInstance()
                     .collection("users")
@@ -147,6 +148,7 @@ class ProfileFragment : Fragment() {
 
     private fun loadHeatmapData(uid: String) {
         viewLifecycleOwner.lifecycleScope.launch {
+            if (_binding == null) return@launch
             try {
                 val logs = FirebaseFirestore.getInstance()
                     .collection("logs")

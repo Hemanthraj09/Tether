@@ -37,10 +37,15 @@ class LeaderboardViewModel : ViewModel() {
         leaderboardJob = viewModelScope.launch {
             _uiState.value = LeaderboardUiState.Loading
             repository.getLeaderboardFlow(groupId).collect { entries ->
-                _uiState.value = if (entries.isEmpty()) {
-                    LeaderboardUiState.Empty
-                } else {
-                    LeaderboardUiState.Success(entries)
+                try {
+                    _uiState.value = if (entries.isEmpty()) {
+                        LeaderboardUiState.Empty
+                    } else {
+                        LeaderboardUiState.Success(entries)
+                    }
+                } catch (e: Exception) {
+                    android.util.Log.e("TetherDebug", "Error in leaderboard collect: ${e.message}", e)
+                    _uiState.value = LeaderboardUiState.Error(e.message ?: "Unknown error")
                 }
             }
         }
