@@ -86,7 +86,7 @@ class LeaderboardRepository {
 
         val group = groupDoc
             .toObject(Group::class.java)
-            ?: throw Exception("Group not found")
+            ?: return emptyList()
 
         val weekKey = getCurrentWeekKey()
 

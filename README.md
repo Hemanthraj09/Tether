@@ -1,6 +1,6 @@
-# Tether: Social Goal Tracking & Focus Management
+# Tether: Social Accountability Android App
 
-Tether is a powerful Android application designed to harness the power of social accountability. Whether you're studying, working out, or building a new habit, Tether connects you with your crew to ensure no one falls behind.
+Tether is a social accountability app built for people who work better with a little competition. Create a group with your friends, pick a goal, and show up every day.
 
 ## 🚀 Key Features
 
@@ -15,12 +15,12 @@ Tether is a powerful Android application designed to harness the power of social
 *   **Dynamic Group Feed:** A real-time stream of your group's activity, logs, and progress.
 
 ### 📊 Progress Tracking & Analytics
-*   **Activity Heatmap:** A GitHub-style visualization of your consistency over the past 52 weeks.
-*   **Leaderboards:** Friendly competition with daily and weekly rankings.
-*   **Streak System:** Build and maintain momentum. Missing a day resets your streak—don't let the chain break!
+*   **Activity Heatmap:** Watch your heatmap fill up, one logged day at a time.
+*   **Leaderboards:** The leaderboard tells the truth about who's actually putting in the work.
+*   **Streak System:** Build your streak and maintain momentum. Don't let the chain break!
 
 ### 🔔 Social Interactions
-*   **Nudges:** Send quick notifications to group members who haven't logged their progress lately.
+*   **Nudges:** Nudge friends who've gone quiet.
 *   **Live Updates:** Real-time synchronization via Firebase Firestore.
 
 ---
@@ -59,6 +59,9 @@ com.tether.app/
 ---
 
 ## 🏁 Getting Started
+
+### 📥 Download APK
+[![Download Tether](https://img.shields.io/badge/Download-APK-success?style=for-the-badge&logo=android)](https://github.com/Hemanthraj09/Tether/releases/latest/download/Tether.apk)
 
 ### Prerequisites
 *   Android Studio Ladybug or newer.

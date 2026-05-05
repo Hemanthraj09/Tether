@@ -42,6 +42,17 @@ class TimerModeDialogFragment : DialogFragment() {
         }
     }
 
+    override fun onStart() {
+        super.onStart()
+        dialog?.window?.apply {
+            setLayout(
+                (resources.displayMetrics.widthPixels * 0.9).toInt(),
+                ViewGroup.LayoutParams.WRAP_CONTENT
+            )
+            setBackgroundDrawableResource(android.R.color.transparent)
+        }
+    }
+
     private fun startTimer(mode: TetherTimerService.TimerMode, focusMins: Int = 0, breakMins: Int = 0) {
         val intent = Intent(requireContext(), TetherTimerService::class.java).apply {
             putExtra(TetherTimerService.EXTRA_GROUP_ID, groupId)

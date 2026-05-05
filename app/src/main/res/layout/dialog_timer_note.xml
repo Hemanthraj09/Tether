@@ -27,7 +27,7 @@
             android:id="@+id/etNote"
             android:layout_width="match_parent"
             android:layout_height="wrap_content"
-            android:hint="Optional"
+            android:hint="@string/log_note_hint"
             android:textColor="@color/colorTextPrimary"
             android:textColorHint="@color/colorTextSecondary"
             android:background="@drawable/bg_input_field"

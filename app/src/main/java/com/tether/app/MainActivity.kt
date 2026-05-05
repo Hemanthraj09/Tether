@@ -17,6 +17,7 @@ import com.google.firebase.firestore.FirebaseFirestore
 import android.view.View
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.tasks.await
+import android.content.Context
 
 class MainActivity : AppCompatActivity() {
 
@@ -32,6 +33,13 @@ class MainActivity : AppCompatActivity() {
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
+
+        val prefs = getSharedPreferences("tether_prefs", MODE_PRIVATE)
+        if (!prefs.getBoolean("onboarding_complete", false)) {
+            startActivity(Intent(this, OnboardingActivity::class.java))
+            finish()
+            return
+        }
 
         binding = ActivityMainBinding.inflate(layoutInflater)
         setContentView(binding.root)
@@ -165,7 +173,13 @@ class MainActivity : AppCompatActivity() {
                 override fun handleOnBackPressed() {
                     val currentDest = navController.currentDestination?.id
                     when (currentDest) {
-                        R.id.groupListFragment -> finish()
+                        R.id.groupListFragment,
+                        R.id.homeFragment -> {
+                            // If we can't pop anymore, then finish
+                            if (!navController.popBackStack()) {
+                                finish()
+                            }
+                        }
                         R.id.leaderboardFragment,
                         R.id.profileFragment,
                         R.id.groupFragment -> {
@@ -179,7 +193,9 @@ class MainActivity : AppCompatActivity() {
                             )
                         }
                         else -> {
-                            navController.popBackStack()
+                            if (!navController.popBackStack()) {
+                                finish()
+                            }
                         }
                     }
                 }

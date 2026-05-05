@@ -33,6 +33,11 @@
             android:screenOrientation="portrait"
             android:theme="@style/Theme.Tether"/>
 
+        <activity
+            android:name=".OnboardingActivity"
+            android:exported="false"
+            android:screenOrientation="portrait" />
+
         <service
             android:name=".timer.TetherTimerService"
             android:enabled="true"

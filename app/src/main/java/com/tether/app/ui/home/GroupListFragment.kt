@@ -15,6 +15,7 @@ import com.tether.app.data.model.Group
 import com.tether.app.databinding.FragmentGroupListBinding
 import com.tether.app.ui.group.GroupViewModel
 import com.tether.app.ui.group.UserGroupsState
+import com.tether.app.utils.NotificationStore
 import com.tether.app.utils.TetherToast
 import kotlinx.coroutines.launch
 
@@ -41,6 +42,8 @@ class GroupListFragment : Fragment() {
 
         observeGroups()
         groupViewModel.loadUserGroups()
+        setupNotificationBell()
+        startGroupActivityListeners()
 
         binding.btnJoinCreateFromList.setOnClickListener {
             findNavController().navigate(R.id.action_groupList_to_group)
@@ -177,6 +180,87 @@ class GroupListFragment : Fragment() {
             }
             .setNegativeButton("Cancel", null)
             .show()
+    }
+
+    private fun setupNotificationBell() {
+        updateBellDot()
+        binding.btnGroupsNotification.setOnClickListener {
+            NotificationStore.markRead(requireContext())
+            updateBellDot()
+            showNotificationsBottomSheet()
+        }
+    }
+
+    private fun updateBellDot() {
+        val hasUnread = NotificationStore.hasUnread(requireContext())
+        // Show/hide orange dot overlay on bell
+        binding.notifDot.visibility = if (hasUnread) View.VISIBLE else View.GONE
+    }
+
+    private fun showNotificationsBottomSheet() {
+        val notifications = NotificationStore.getNotifications(requireContext())
+        val bottomSheet = com.google.android.material.bottomsheet.BottomSheetDialog(requireContext())
+        val view = layoutInflater.inflate(R.layout.bottom_sheet_notifications, null)
+        bottomSheet.setContentView(view)
+
+        val recycler = view.findViewById<androidx.recyclerview.widget.RecyclerView>(R.id.rvNotifications)
+        val layoutEmpty = view.findViewById<android.view.View>(R.id.layoutNotifEmpty)
+        val tvDate = view.findViewById<android.widget.TextView>(R.id.tvNotifDate)
+
+        tvDate.text = java.text.SimpleDateFormat("MMM dd", java.util.Locale.getDefault())
+            .format(java.util.Date())
+
+        if (notifications.isEmpty()) {
+            recycler.visibility = View.GONE
+            layoutEmpty.visibility = View.VISIBLE
+        } else {
+            recycler.visibility = View.VISIBLE
+            layoutEmpty.visibility = View.GONE
+            recycler.layoutManager = androidx.recyclerview.widget.LinearLayoutManager(requireContext())
+            recycler.adapter = NotificationAdapter(notifications)
+        }
+
+        bottomSheet.show()
+    }
+
+    private fun startGroupActivityListeners() {
+        val currentUid = com.google.firebase.auth.FirebaseAuth.getInstance().currentUser?.uid ?: return
+        val firestore = com.google.firebase.firestore.FirebaseFirestore.getInstance()
+        val today = java.text.SimpleDateFormat("yyyy-MM-dd", java.util.Locale.getDefault()).format(java.util.Date())
+
+        viewLifecycleOwner.lifecycleScope.launch {
+            groupViewModel.userGroupsState.collect { state ->
+                if (state is com.tether.app.ui.group.UserGroupsState.Success) {
+                    state.groups.forEach { group ->
+                        firestore.collection("logs")
+                            .whereEqualTo("groupId", group.id)
+                            .whereEqualTo("date", today)
+                            .addSnapshotListener { snapshot, _ ->
+                                snapshot?.documentChanges?.forEach { change ->
+                                    if (change.type == com.google.firebase.firestore.DocumentChange.Type.ADDED) {
+                                        val logUid = change.document.getString("userId") ?: ""
+                                        if (logUid != currentUid) {
+                                            val userName = change.document.getString("userName") ?: "Someone"
+                                            val hours = change.document.getDouble("value") ?: 0.0
+                                            val totalMins = (hours * 60).toInt()
+                                            val h = totalMins / 60
+                                            val m = totalMins % 60
+                                            val hoursStr = when {
+                                                h == 0 -> "${m}m"
+                                                m == 0 -> "${h}h"
+                                                else -> "${h}h ${m}m"
+                                            }
+                                            val message = "$userName logged $hoursStr in ${group.name}"
+                                            NotificationStore.addNotification(requireContext(), message)
+                                            activity?.runOnUiThread { updateBellDot() }
+                                        }
+                                    }
+                                }
+                            }
+                    }
+                }
+            }
+        }
     }
 
     override fun onDestroyView() {

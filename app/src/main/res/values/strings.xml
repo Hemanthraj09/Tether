@@ -47,4 +47,5 @@
     <string name="no_group_yet">No Group Yet</string>
     <string name="no_group_subtitle">Join or create a group to start tracking your progress with friends.</string>
     <string name="join_or_create">Join or Create a Group</string>
+    <string name="log_note_hint">What did you work on today?</string>
 </resources>

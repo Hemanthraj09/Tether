@@ -108,4 +108,8 @@ class GroupFeedViewModel : ViewModel() {
             else GroupActionState.Error(result.exceptionOrNull()?.message ?: "Failed to leave group")
         }
     }
+
+    fun resetGroupActionState() {
+        _groupActionState.value = GroupActionState.Idle
+    }
 }

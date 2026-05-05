@@ -38,20 +38,36 @@
                 android:background="@drawable/bg_avatar_circle"
                 android:src="@drawable/ic_add"
                 app:layout_constraintBottom_toBottomOf="parent"
-                app:layout_constraintEnd_toStartOf="@+id/btnGroupsNotification"
+                app:layout_constraintEnd_toStartOf="@+id/notifContainer"
                 app:layout_constraintTop_toTopOf="parent"
                 app:tint="@color/colorTextPrimary" />
 
-            <ImageButton
-                android:id="@+id/btnGroupsNotification"
+            <FrameLayout
+                android:id="@+id/notifContainer"
                 android:layout_width="40dp"
                 android:layout_height="40dp"
-                android:background="@drawable/bg_avatar_circle"
-                android:src="@drawable/ic_notifications"
                 app:layout_constraintBottom_toBottomOf="parent"
                 app:layout_constraintEnd_toEndOf="parent"
-                app:layout_constraintTop_toTopOf="parent"
-                app:tint="@color/colorTextPrimary" />
+                app:layout_constraintTop_toTopOf="parent">
+
+                <ImageButton
+                    android:id="@+id/btnGroupsNotification"
+                    android:layout_width="40dp"
+                    android:layout_height="40dp"
+                    android:background="@drawable/bg_avatar_circle"
+                    android:src="@drawable/ic_notifications"
+                    app:tint="@color/colorTextPrimary" />
+
+                <View
+                    android:id="@+id/notifDot"
+                    android:layout_width="10dp"
+                    android:layout_height="10dp"
+                    android:layout_gravity="top|end"
+                    android:layout_margin="2dp"
+                    android:background="@drawable/bg_notif_dot"
+                    android:visibility="gone" />
+
+            </FrameLayout>
 
         </androidx.constraintlayout.widget.ConstraintLayout>
     </com.google.android.material.appbar.AppBarLayout>

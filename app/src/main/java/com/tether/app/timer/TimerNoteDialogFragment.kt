@@ -40,10 +40,22 @@ class TimerNoteDialogFragment : DialogFragment() {
         binding.tvFocusedTime.text = "You focused for $timeStr"
 
         binding.btnLogIt.setOnClickListener {
+            binding.btnLogIt.isEnabled = false
             val note = binding.etNote.text.toString().trim()
             viewModel.writeLog(groupId, hours, note)
             TetherToast.show(requireContext(), "Logged $timeStr! Keep it up 🔥")
             dismiss()
+        }
+    }
+
+    override fun onStart() {
+        super.onStart()
+        dialog?.window?.apply {
+            setLayout(
+                (resources.displayMetrics.widthPixels * 0.9).toInt(),
+                ViewGroup.LayoutParams.WRAP_CONTENT
+            )
+            setBackgroundDrawableResource(android.R.color.transparent)
         }
     }
 

@@ -91,6 +91,7 @@ class LogBottomSheetFragment : BottomSheetDialogFragment() {
                 TetherToast.show(requireContext(), "Please log at least 5 minutes", isError = true)
                 return@setOnClickListener
             }
+            binding.btnLogIt.isEnabled = false
             val totalHours = currentHours + (currentMinutes / 60.0)
             val note = binding.etNote.text.toString().trim()
             val timeStr = when {

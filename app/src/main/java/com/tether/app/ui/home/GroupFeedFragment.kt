@@ -126,14 +126,8 @@ class GroupFeedFragment : Fragment() {
         }
 
         registerTimerReceiver()
-        childFragmentManager.setFragmentResultListener("timer_stopped", viewLifecycleOwner) { _, bundle ->
+        childFragmentManager.setFragmentResultListener("timer_stopped", viewLifecycleOwner) { _, _ ->
             updateSessionButton(forceInactive = true)
-            val focusSeconds = bundle.getLong("focusSeconds", 0L)
-            val groupId = bundle.getString("groupId", "")
-            if (focusSeconds > 0 && groupId.isNotEmpty()) {
-                TimerNoteDialogFragment.newInstance(focusSeconds, groupId)
-                    .show(childFragmentManager, "TimerNoteDialog")
-            }
         }
         updateSessionButton()
     }
@@ -269,16 +263,20 @@ class GroupFeedFragment : Fragment() {
             viewModel.groupActionState.collect { state ->
                 when (state) {
                     is GroupActionState.Success -> {
-                        TetherToast.show(
-                            requireContext(),
-                            "Done!")
-                        findNavController().popBackStack()
+                        viewModel.resetGroupActionState()
+                        TetherToast.show(requireContext(), "Done!")
+                        findNavController().navigate(
+                            R.id.groupListFragment,
+                            null,
+                            androidx.navigation.NavOptions.Builder()
+                                .setPopUpTo(R.id.groupListFragment, false)
+                                .setLaunchSingleTop(true)
+                                .build()
+                        )
                     }
                     is GroupActionState.Error -> {
-                        TetherToast.show(
-                            requireContext(),
-                            state.message,
-                            isError = true)
+                        viewModel.resetGroupActionState()
+                        TetherToast.show(requireContext(), state.message, isError = true)
                     }
                     else -> {}
                 }
