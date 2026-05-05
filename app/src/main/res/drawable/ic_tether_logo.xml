@@ -1,0 +1,52 @@
+<vector xmlns:android="http://schemas.android.com/apk/res/android"
+    android:width="100dp"
+    android:height="100dp"
+    android:viewportWidth="100"
+    android:viewportHeight="100">
+
+    <!-- Rope shaft with wave -->
+    <path
+        android:pathData="M50,88 C40,80 60,76 50,68 C40,60 60,56 50,48 L50,22"
+        android:strokeColor="#FF6B2B"
+        android:strokeWidth="7"
+        android:strokeLineCap="round"
+        android:fillColor="@android:color/transparent"/>
+
+    <!-- Arrow head -->
+    <path
+        android:pathData="M36,32 L50,18 L64,32"
+        android:strokeColor="#FF6B2B"
+        android:strokeWidth="7"
+        android:strokeLineCap="round"
+        android:strokeLineJoin="round"
+        android:fillColor="@android:color/transparent"/>
+
+    <!-- Knot anchor outer (gold) -->
+    <path
+        android:pathData="M50,88 m-7,0 a7,7 0 1,0 14,0 a7,7 0 1,0 -14,0"
+        android:fillColor="#FFB82B"/>
+
+    <!-- Knot anchor inner (orange) -->
+    <path
+        android:pathData="M50,88 m-3,0 a3,3 0 1,0 6,0 a3,3 0 1,0 -6,0"
+        android:fillColor="#FF6B2B"/>
+
+    <!-- Left motion line -->
+    <path
+        android:pathData="M28,50 L34,44"
+        android:strokeColor="#FF6B2B"
+        android:strokeWidth="3"
+        android:strokeLineCap="round"
+        android:strokeAlpha="0.6"
+        android:fillColor="@android:color/transparent"/>
+
+    <!-- Right motion line -->
+    <path
+        android:pathData="M66,44 L72,50"
+        android:strokeColor="#FF6B2B"
+        android:strokeWidth="3"
+        android:strokeLineCap="round"
+        android:strokeAlpha="0.6"
+        android:fillColor="@android:color/transparent"/>
+
+</vector>
