@@ -1,6 +1,6 @@
 # Tether: Social Accountability Android App
 
-Tether is a social accountability app built for people who work better with a little competition. Create a group with your friends, pick a goal, and show up every day.
+Tether is a social accountability app built for people who work better with competition. Create a group with your friends, pick a goal, and show up every day.
 
 ## 🚀 Key Features
 
