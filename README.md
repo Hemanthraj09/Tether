@@ -1,7 +1,6 @@
 <div align="center">
 
-<img src="app/src/main/res/drawable/ic_tether_logo.xml" alt="Tether Logo" width="80"/>
-
+<img src="logo.png" alt="Tether Logo" width="80"/>
 # Tether
 
 **No noise. Just you, your crew, and the grind.**
