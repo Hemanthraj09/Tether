@@ -1,7 +1,8 @@
 <div align="center">
 
 <img src="logo.png" alt="Tether Logo" width="80"/>
-# Tether
+
+## Tether
 
 **No noise. Just you, your crew, and the grind.**
 
