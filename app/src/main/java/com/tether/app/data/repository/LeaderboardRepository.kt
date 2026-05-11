@@ -145,7 +145,15 @@ class LeaderboardRepository {
                     .document(uid)
                     .get().await()
             } catch (e: Exception) { null }
-            val streak = streakDoc?.getLong("currentStreak")?.toInt() ?: 0
+            val storedStreak = streakDoc?.getLong("currentStreak")?.toInt() ?: 0
+            val lastLogDate = streakDoc?.getString("lastLogDate") ?: ""
+            val sdfForStreak = java.text.SimpleDateFormat("yyyy-MM-dd", java.util.Locale.getDefault())
+            val yesterdayForStreak = sdfForStreak.let {
+                val cal = java.util.Calendar.getInstance()
+                cal.add(java.util.Calendar.DAY_OF_MONTH, -1)
+                it.format(cal.time)
+            }
+            val streak = if (lastLogDate == today || lastLogDate == yesterdayForStreak) storedStreak else 0
 
             val hours = hoursDocSnapshot?.getDouble(uid) ?: 0.0
 
