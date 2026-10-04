@@ -12,6 +12,7 @@ Tether is a native Android social accountability app built for people who work b
 [![Release](https://img.shields.io/github/v/release/Hemanthraj09/Tether?color=FF6B2B&style=for-the-badge)](https://github.com/Hemanthraj09/Tether/releases/latest)
 [![Platform](https://img.shields.io/badge/Platform-Android-3DDC84?style=for-the-badge&logo=android&logoColor=white)](https://android.com)
 [![Kotlin](https://img.shields.io/badge/Kotlin-7F52FF?style=for-the-badge&logo=kotlin&logoColor=white)](https://kotlinlang.org)
+[![CI](https://img.shields.io/github/actions/workflow/status/Hemanthraj09/Tether/ci.yml?branch=master&label=CI&style=for-the-badge)](https://github.com/Hemanthraj09/Tether/actions/workflows/ci.yml)
 
 </div>
 
@@ -34,19 +35,19 @@ Daily leaderboard that resets sharply at midnight. Sorted by today's hours — n
 Per-group streaks tracked independently across all your groups. Full GitHub-style heatmap on your profile showing the entire calendar year at a glance.
 
 ### ⏱️ Focus Timer
-Two modes — **Stopwatch** for tracking real work time, **Pomodoro** for structured 25-minute focus blocks. Runs as a foreground service with a persistent notification, even when the app is in the background. Session time is auto-logged when you stop.
+Two modes — **Stopwatch** for tracking real work time (with 5/10-minute breaks), **Pomodoro** for 25/5 or 50/10 focus/break cycles. Runs as a foreground service with a live notification; time is computed from timestamps so it stays exact with the screen off, and a session survives the app being killed. Only focus time is logged.
 
 ### 👥 Group System
 Create a group, share the 6-character invite code with your circle. Max 6 members per group — tight circles only. Creators can delete, members can leave anytime.
 
 ### 👊 Nudge
-Tap anyone's avatar on the leaderboard to send them a push notification nudge. One nudge per person per day — use it wisely.
+Tap anyone's avatar on the leaderboard or group screen to nudge them — they get a notification that opens the group. One nudge per person per day — use it wisely.
 
 ### 📈 Pace Indicator
 If you're behind yesterday's pace, a chip appears on the leaderboard card. Disappears the moment you catch up.
 
 ### 🔔 Activity Feed
-Today's Activity notification feed shows all group logs in real time. Unread dot on the bell icon when you have new activity.
+Today's Activity feed on the home screen collects your groups' logs and joins in real time. Unread dot on the bell icon when there's something new.
 
 ---
 
@@ -56,11 +57,14 @@ Today's Activity notification feed shows all group logs in real time. Unread dot
 
 Tether follows **MVVM** with a Repository pattern across 4 layers:
 
-- **UI Layer** — Single-Activity with Navigation Component. Fragments for each screen, BottomSheet for logging and timer control.
-- **ViewModel Layer** — `GroupFeedViewModel`, `LeaderboardViewModel`, `AuthViewModel` managing state via `StateFlow`.
-- **Repository Layer** — `LogRepository`, `LeaderboardRepository`, `GroupRepository`, `AuthRepository` handling all Firestore operations.
-- **Local Layer** — `NotificationStore` (SharedPreferences) for the daily activity feed. `TetherTimerService` as a foreground service for the focus timer.
-- **Firebase** — Firestore with real-time snapshot listeners across `users`, `groups`, `logs`, `groupStats`. FCM for nudge push notifications. Firebase Auth for email/password and Google Sign-In.
+- **UI Layer** — Single-Activity with Navigation Component (tab back stacks are saved and restored). Fragments collect state with `repeatOnLifecycle`; lists use `ListAdapter` + `DiffUtil`.
+- **ViewModel Layer** — one ViewModel per screen exposing `StateFlow`s built from Firestore snapshot listeners (`stateIn(WhileSubscribed)`), so data survives navigation and renders from cache instantly.
+- **Domain Layer** — pure, unit-tested Kotlin: `StreakCalculator`, `LeaderboardBuilder`, `TimerEngine`, `HeatmapGrid`, `InviteCodes`, `DateKeys`.
+- **Repository Layer** — `LogRepository`, `LeaderboardRepository`, `GroupRepository`, `NudgeRepository`, … Multi-document writes use atomic batches/transactions.
+- **Background** — `TetherTimerService` (foreground service, persisted state) and `RealtimeWatcher` (nudges + group activity while the app is alive).
+- **Firebase** — Firestore (`users`, `groups`, `logs`, `groupStats/*`), Firebase Auth (email/password + Google), Crashlytics.
+
+A detailed write-up of every feature, design decision and trade-off is in **[docs/IMPLEMENTATION.md](docs/IMPLEMENTATION.md)**.
 
 ---
 
@@ -73,10 +77,33 @@ Tether follows **MVVM** with a Repository pattern across 4 layers:
 | Architecture | MVVM, Single Activity |
 | Async | Kotlin Coroutines + StateFlow |
 | Backend | Firebase Firestore, Firebase Auth |
-| Push Notifications | Firebase Cloud Messaging (FCM) |
-| Local Storage | SharedPreferences |
-| Timer | Android Foreground Service |
+| Notifications | Local notifications driven by Firestore listeners |
+| Local Storage | SharedPreferences, Firestore offline cache |
+| Timer | Android Foreground Service + pure `TimerEngine` |
+| Crash reporting | Firebase Crashlytics (release builds) |
+| Testing | JUnit (domain logic), Firestore emulator + `@firebase/rules-unit-testing` (security rules) |
+| CI/CD | GitHub Actions — tests, lint, rules tests; signed APK on `v*` tags |
+| Release | R8 minify + resource shrinking, baseline profiles via ProfileInstaller |
 | Min SDK | 26 (Android 8.0) |
+
+---
+
+## Engineering
+
+**Testing** — 42 unit tests cover the logic that decides what users see: streak rules (month/year/leap boundaries), leaderboard ranking and pace, the timer state machine (Pomodoro catch-up after sleep, breaks, reboot recovery), date keys and the heatmap grid.
+
+```bash
+./gradlew testDebugUnitTest
+```
+
+**Security rules** — [`firestore.rules`](firestore.rules) only lets users write data about themselves, requires group membership for group writes, caps the 6-member limit server-side, and only allows leaderboard counters to increase by ≤ 24h per write. 38 emulator tests replay every write the app makes plus abuse cases.
+
+```bash
+cd firestore-tests && npm install && npm test   # needs Java 11+ for the emulator
+firebase deploy --only firestore:rules          # deploy after the tests pass
+```
+
+**CI** — every push runs unit tests, lint, a debug build and the rules tests. Pushing a tag like `v1.1.0` builds a signed release APK and attaches it to a GitHub Release as `Tether.apk`.
 
 ---
 
