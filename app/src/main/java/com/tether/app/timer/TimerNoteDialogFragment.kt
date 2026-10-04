@@ -37,8 +37,11 @@ class TimerNoteDialogFragment : DialogFragment() {
         super.onViewCreated(view, savedInstanceState)
 
         // Under a minute there's nothing meaningful to log (it showed as "0m").
-        if (focusSeconds < 60) {
-            binding.tvFocusedTime.text = "Session too short to log"
+        // Over 24h is a timer left running by mistake (and rejected by the server rules).
+        if (focusSeconds < 60 || focusSeconds > MAX_LOG_SECONDS) {
+            binding.tvFocusedTime.text =
+                if (focusSeconds < 60) "Session too short to log"
+                else "Session over 24h — looks like the timer was left running"
             binding.etNote.visibility = View.GONE
             binding.btnLogIt.text = "Close"
             binding.btnLogIt.setOnClickListener { dismiss() }
@@ -76,6 +79,7 @@ class TimerNoteDialogFragment : DialogFragment() {
 
     companion object {
         const val TAG = "TimerNoteDialog"
+        private const val MAX_LOG_SECONDS = 24 * 3600L
 
         fun newInstance(focusSeconds: Long, groupId: String): TimerNoteDialogFragment {
             return TimerNoteDialogFragment().apply {

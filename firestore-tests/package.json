@@ -1,0 +1,13 @@
+{
+  "name": "tether-firestore-rules-tests",
+  "private": true,
+  "description": "Security-rules tests for Tether, run against the Firestore emulator",
+  "scripts": {
+    "test": "firebase emulators:exec --only firestore --project demo-tether \"node --test rules.test.js\""
+  },
+  "devDependencies": {
+    "@firebase/rules-unit-testing": "^5.0.2",
+    "firebase": "^12.19.0",
+    "firebase-tools": "^15.32.1"
+  }
+}

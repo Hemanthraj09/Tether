@@ -1,0 +1,169 @@
+rules_version = '2';
+
+// Tether Firestore security rules.
+//
+// Every rule mirrors a real access path in the app (see docs/IMPLEMENTATION.md)
+// and is covered by emulator tests in firestore-tests/rules.test.js.
+// Principles:
+//  - you can only write data about yourself (your user doc, your hours,
+//    your streak, nudges you send),
+//  - group-scoped writes require membership,
+//  - leaderboard counters can only go up by a sane amount (≤ 24h per write).
+service cloud.firestore {
+  match /databases/{database}/documents {
+
+    // ── Helpers ────────────────────────────────────────────────
+
+    function signedIn() {
+      return request.auth != null;
+    }
+
+    function me() {
+      return request.auth.uid;
+    }
+
+    function groupPath(groupId) {
+      return /databases/$(database)/documents/groups/$(groupId);
+    }
+
+    function isMember(groupId) {
+      return signedIn()
+        && exists(groupPath(groupId))
+        && me() in get(groupPath(groupId)).data.members;
+    }
+
+    // Keys touched by this write (all keys on create).
+    function changedKeys() {
+      return resource == null
+        ? request.resource.data.keys()
+        : request.resource.data.diff(resource.data).affectedKeys();
+    }
+
+    // Stats docs are maps of uid → hours. A user may only raise their own value.
+    function onlyOwnHoursIncrease() {
+      let before = resource == null ? 0 : resource.data.get(me(), 0);
+      let after = request.resource.data.get(me(), 0);
+      return changedKeys().hasOnly([me()])
+        && after is number
+        && after >= before
+        && after - before <= 24;
+    }
+
+    // ── users/{uid} ────────────────────────────────────────────
+    // Readable by any signed-in user (names on leaderboards); writable by owner.
+    match /users/{userId} {
+      allow read: if signedIn();
+
+      allow create: if signedIn() && me() == userId
+        && request.resource.data.keys().hasOnly(
+             ['uid', 'name', 'email', 'groupIds', 'totalHours',
+              // written by app versions before May 2026
+              'currentStreak', 'longestStreak', 'lastLogDate']);
+
+      allow update: if signedIn() && me() == userId
+        && changedKeys().hasOnly(['uid', 'name', 'email', 'groupIds', 'totalHours'])
+        && (!('totalHours' in request.resource.data) || request.resource.data.totalHours is number);
+
+      allow delete: if false;
+    }
+
+    // ── groups/{groupId} ───────────────────────────────────────
+    match /groups/{groupId} {
+      // Joining looks a group up by invite code before you're a member.
+      allow read: if signedIn();
+
+      allow create: if signedIn()
+        && request.resource.data.id == groupId
+        && request.resource.data.createdBy == me()
+        && request.resource.data.members == [me()]
+        && request.resource.data.name is string
+        && request.resource.data.name.size() > 0
+        && request.resource.data.name.size() <= 60;
+
+      // The only edits the app makes: someone adds or removes *themselves*.
+      allow update: if signedIn()
+        && changedKeys().hasOnly(['members'])
+        && (isJoining() || isLeaving());
+
+      allow delete: if signedIn() && resource.data.createdBy == me();
+
+      function isJoining() {
+        let before = resource.data.members;
+        let after = request.resource.data.members;
+        return !(me() in before)
+          && me() in after
+          && after.hasAll(before)
+          && after.size() == before.size() + 1
+          && after.size() <= 6
+          && resource.data.inviteCode != '';   // solo groups can't be joined
+      }
+
+      function isLeaving() {
+        let before = resource.data.members;
+        let after = request.resource.data.members;
+        return me() in before
+          && !(me() in after)
+          && before.hasAll(after)
+          && after.size() == before.size() - 1;
+      }
+    }
+
+    // ── logs/{logId} ───────────────────────────────────────────
+    match /logs/{logId} {
+      // Group activity + your own heatmap. (Logs of groups you've left stay
+      // part of your history, so reads aren't limited to current members.)
+      allow read: if signedIn();
+
+      allow create: if signedIn()
+        && request.resource.data.userId == me()
+        && isMember(request.resource.data.groupId)
+        && request.resource.data.value is number
+        && request.resource.data.value >= 0
+        && request.resource.data.value <= 24
+        && request.resource.data.date is string;
+
+      allow update: if false;
+      allow delete: if signedIn() && resource.data.userId == me();
+    }
+
+    // ── groupStats/{groupId}/... ───────────────────────────────
+    match /groupStats/{groupId} {
+
+      match /daily/{date} {
+        allow read: if signedIn();
+        allow write: if isMember(groupId) && onlyOwnHoursIncrease();
+      }
+
+      match /weekly/{week} {
+        allow read: if signedIn();
+        allow write: if isMember(groupId) && onlyOwnHoursIncrease();
+      }
+
+      match /streaks/{userId} {
+        allow read: if signedIn();
+        allow write: if isMember(groupId) && me() == userId
+          && request.resource.data.keys().hasOnly(['currentStreak', 'longestStreak', 'lastLogDate']);
+      }
+
+      // Id format {date}_{fromUid}_{toUid} → one nudge per person per day.
+      match /nudges/{nudgeId} {
+        allow read: if signedIn();
+        allow create, update: if isMember(groupId)
+          && request.resource.data.nudgerUid == me()
+          && request.resource.data.nudgedUid != me()
+          && request.resource.data.nudgedUid in get(groupPath(groupId)).data.members
+          && nudgeId == request.resource.data.date + '_' + me() + '_' + request.resource.data.nudgedUid;
+        allow delete: if false;
+      }
+    }
+
+    // ── Legacy ─────────────────────────────────────────────────
+    // Nudge path used by app versions before Oct 2026. Kept so old installs
+    // don't error; delete this block once everyone has updated.
+    match /nudges/{document=**} {
+      allow read, write: if signedIn();
+    }
+
+    // Everything else is denied by default.
+  }
+}
