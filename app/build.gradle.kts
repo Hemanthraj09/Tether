@@ -2,6 +2,7 @@ plugins {
     alias(libs.plugins.android.application)
     alias(libs.plugins.kotlin.android)
     id("com.google.gms.google-services")
+    id("com.google.firebase.crashlytics")
 }
 
 android {
@@ -14,10 +15,26 @@ android {
         applicationId = "com.tether.app"
         minSdk = 26
         targetSdk = 36
-        versionCode = 1
-        versionName = "1.0"
+        versionCode = 2
+        versionName = "1.1.0"
 
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
+        // Crash reports only from release builds (see AndroidManifest meta-data).
+        manifestPlaceholders["crashlyticsEnabled"] = false
+    }
+
+    // CI (GitHub Actions) signs releases with a keystore passed via secrets.
+    // Locally, without those variables, release builds use the debug key.
+    val ciKeystore = System.getenv("TETHER_KEYSTORE_PATH")
+    signingConfigs {
+        if (ciKeystore != null) {
+            create("ci") {
+                storeFile = file(ciKeystore)
+                storePassword = System.getenv("TETHER_KEYSTORE_PASSWORD")
+                keyAlias = System.getenv("TETHER_KEY_ALIAS")
+                keyPassword = System.getenv("TETHER_KEY_PASSWORD")
+            }
+        }
     }
 
     buildTypes {
@@ -29,10 +46,10 @@ android {
                 getDefaultProguardFile("proguard-android-optimize.txt"),
                 "proguard-rules.pro"
             )
-            // Signed with the debug key so the SHA-1 already registered in
-            // Firebase keeps Google Sign-In working for sideloaded builds.
-            // Switch to a real release keystore before publishing on Play.
-            signingConfig = signingConfigs.getByName("debug")
+            // The debug key's SHA-1 is registered in Firebase, so Google Sign-In
+            // works for sideloaded builds. Use a dedicated keystore for Play.
+            signingConfig = signingConfigs.getByName(if (ciKeystore != null) "ci" else "debug")
+            manifestPlaceholders["crashlyticsEnabled"] = true
         }
     }
     compileOptions {
@@ -71,6 +88,7 @@ dependencies {
     implementation(platform("com.google.firebase:firebase-bom:33.1.0"))
     implementation("com.google.firebase:firebase-auth-ktx")
     implementation("com.google.firebase:firebase-firestore-ktx")
+    implementation("com.google.firebase:firebase-crashlytics")
     implementation("org.jetbrains.kotlinx:kotlinx-coroutines-play-services:1.7.3")
     implementation("com.google.android.gms:play-services-auth:21.2.0")
 
