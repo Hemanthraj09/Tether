@@ -2,34 +2,36 @@ package com.tether.app
 
 import android.content.Intent
 import android.os.Bundle
-import androidx.activity.OnBackPressedCallback
+import android.view.View
 import androidx.appcompat.app.AppCompatActivity
+import androidx.core.os.bundleOf
 import androidx.core.view.WindowCompat
 import androidx.core.view.WindowInsetsControllerCompat
-import androidx.lifecycle.lifecycleScope
 import androidx.navigation.NavController
-import androidx.navigation.findNavController
+import androidx.navigation.NavOptions
 import androidx.navigation.fragment.NavHostFragment
 import com.tether.app.data.repository.AuthRepository
 import com.tether.app.databinding.ActivityMainBinding
-import com.google.firebase.auth.FirebaseAuth
-import com.google.firebase.firestore.FirebaseFirestore
-import android.view.View
-import kotlinx.coroutines.launch
-import kotlinx.coroutines.tasks.await
-import android.content.Context
+import com.tether.app.timer.TetherTimerService
+import com.tether.app.utils.RealtimeWatcher
 
 class MainActivity : AppCompatActivity() {
 
     private lateinit var binding: ActivityMainBinding
     private lateinit var navController: NavController
-    private var nudgeListener: com.google.firebase.firestore.ListenerRegistration? = null
+    private var watcherAcquired = false
 
     private val requestPermissionsLauncher = registerForActivityResult(
         androidx.activity.result.contract.ActivityResultContracts.RequestMultiplePermissions()
-    ) { permissions ->
+    ) { _ ->
         // permissions granted or denied — no action needed, system handles it
     }
+
+    private val tabDestinations = mapOf(
+        R.id.groupListFragment to R.id.nav_home,
+        R.id.leaderboardFragment to R.id.nav_leaderboard,
+        R.id.profileFragment to R.id.nav_profile
+    )
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
@@ -43,51 +45,51 @@ class MainActivity : AppCompatActivity() {
 
         binding = ActivityMainBinding.inflate(layoutInflater)
         setContentView(binding.root)
+        // The root layout already paints the background; skip the window's
+        // identical full-screen layer (less overdraw on every frame).
+        window.setBackgroundDrawable(null)
 
         setupWindowDecor()
         setupNavController()
-        setupBackPress()
-        startNudgeListener()
+        RealtimeWatcher.acquire(this)
+        watcherAcquired = true
+        TetherTimerService.restoreIfNeeded(this)
         requestAppPermissions()
+
+        if (savedInstanceState == null) {
+            handleNavigateIntent(intent)
+        }
     }
 
     override fun onNewIntent(intent: Intent) {
         super.onNewIntent(intent)
-        handleTimerNotificationIntent(intent)
+        setIntent(intent)
+        handleNavigateIntent(intent)
     }
 
-    override fun onResume() {
-        super.onResume()
-        handleTimerNotificationIntent(intent)
-    }
+    /** Opens a group from a timer/nudge notification tap. */
+    private fun handleNavigateIntent(intent: Intent?) {
+        val groupId = intent?.getStringExtra(EXTRA_NAVIGATE_TO_GROUP) ?: return
+        intent.removeExtra(EXTRA_NAVIGATE_TO_GROUP)
+        if (groupId.isEmpty() || !AuthRepository().isLoggedIn) return
 
-    private fun handleTimerNotificationIntent(intent: Intent?) {
-        val groupId = intent?.getStringExtra("navigateToGroupId")
-            ?: return
-        if (groupId.isEmpty()) return
-        // Clear the extra so it doesn't re-trigger on rotation
-        intent.removeExtra("navigateToGroupId")
+        // Already looking at that group: nothing to do.
+        val current = navController.currentBackStackEntry
+        if (current?.destination?.id == R.id.groupFeedFragment &&
+            current.arguments?.getString("groupId") == groupId
+        ) return
 
-        // Fetch group details and navigate to GroupFeedFragment
-        lifecycleScope.launch {
-            try {
-                val groupDoc = com.google.firebase.firestore
-                    .FirebaseFirestore.getInstance()
-                    .collection("groups")
-                    .document(groupId)
-                    .get()
-                    .await()
-                val groupName = groupDoc.getString("name") ?: ""
-                val goalType = groupDoc.getString("goalType") ?: ""
-                val bundle = android.os.Bundle().apply {
-                    putString("groupId", groupId)
-                    putString("groupName", groupName)
-                    putString("groupGoal", goalType)
-                }
-                findNavController(R.id.navHostFragment)
-                    .navigate(R.id.groupFeedFragment, bundle)
-            } catch (e: Exception) {}
-        }
+        // The group screen loads its name/goal itself, so navigate immediately.
+        navController.navigate(
+            R.id.groupFeedFragment,
+            bundleOf("groupId" to groupId, "groupName" to "", "groupGoal" to ""),
+            NavOptions.Builder()
+                .setEnterAnim(R.anim.slide_in_right)
+                .setExitAnim(R.anim.slide_out_left)
+                .setPopEnterAnim(R.anim.slide_in_left)
+                .setPopExitAnim(R.anim.slide_out_right)
+                .build()
+        )
     }
 
     private fun setupWindowDecor() {
@@ -104,150 +106,75 @@ class MainActivity : AppCompatActivity() {
                 as NavHostFragment
         navController = navHostFragment.navController
 
+        // Start directly on the right screen: no Auth screen flash for
+        // signed-in users. (After a recreation the saved back stack is restored.)
+        val graph = navController.navInflater.inflate(R.navigation.nav_graph)
+        graph.setStartDestination(
+            if (AuthRepository().isLoggedIn) R.id.groupListFragment else R.id.authFragment
+        )
+        navController.setGraph(graph, null)
+
         binding.bottomNav.setOnItemSelectedListener { item ->
             when (item.itemId) {
                 R.id.nav_home -> {
-                    navController.navigate(
-                        R.id.groupListFragment,
-                        null,
-                        androidx.navigation.NavOptions.Builder()
-                            .setPopUpTo(R.id.groupListFragment, true)
-                            .setLaunchSingleTop(true)
-                            .build()
-                    )
+                    // Return to the existing home screen (keeps its state).
+                    if (!navController.popBackStack(R.id.groupListFragment, false, true)) {
+                        navController.navigate(R.id.groupListFragment)
+                    }
                     true
                 }
                 R.id.nav_leaderboard -> {
-                    navController.navigate(
-                        R.id.leaderboardFragment,
-                        null,
-                        androidx.navigation.NavOptions.Builder()
-                            .setPopUpTo(R.id.groupListFragment, false)
-                            .setLaunchSingleTop(true)
-                            .build()
-                    )
+                    navigateToTab(R.id.leaderboardFragment)
                     true
                 }
                 R.id.nav_profile -> {
-                    navController.navigate(
-                        R.id.profileFragment,
-                        null,
-                        androidx.navigation.NavOptions.Builder()
-                            .setPopUpTo(R.id.groupListFragment, false)
-                            .setLaunchSingleTop(true)
-                            .build()
-                    )
+                    navigateToTab(R.id.profileFragment)
                     true
                 }
                 else -> false
             }
         }
+        // Tapping the current tab again does nothing (no reload).
+        binding.bottomNav.setOnItemReselectedListener { }
 
-        // Keep selected item in sync when navigating programmatically
         navController.addOnDestinationChangedListener { _, destination, _ ->
-            val showNav = destination.id in listOf(
-                R.id.groupListFragment,
-                R.id.leaderboardFragment,
-                R.id.profileFragment
-            )
-            binding.bottomNav.visibility = if (showNav) View.VISIBLE else View.GONE
-        }
-
-        val authRepository = AuthRepository()
-        if (authRepository.isLoggedIn) {
-            navController.navigate(
-                R.id.groupListFragment,
-                null,
-                androidx.navigation.NavOptions.Builder()
-                    .setPopUpTo(R.id.authFragment, true)
-                    .setLaunchSingleTop(true)
-                    .build()
-            )
+            val tabItem = tabDestinations[destination.id]
+            binding.bottomNav.visibility = if (tabItem != null) View.VISIBLE else View.GONE
+            // Keep the highlighted tab in sync (e.g. after pressing back).
+            // Setting isChecked does not trigger the selection listener.
+            if (tabItem != null) binding.bottomNav.menu.findItem(tabItem)?.isChecked = true
         }
     }
 
-    private fun setupBackPress() {
-        onBackPressedDispatcher.addCallback(
-            this,
-            object : OnBackPressedCallback(true) {
-                override fun handleOnBackPressed() {
-                    val currentDest = navController.currentDestination?.id
-                    when (currentDest) {
-                        R.id.groupListFragment,
-                        R.id.homeFragment -> {
-                            // If we can't pop anymore, then finish
-                            if (!navController.popBackStack()) {
-                                finish()
-                            }
-                        }
-                        R.id.leaderboardFragment,
-                        R.id.profileFragment,
-                        R.id.groupFragment -> {
-                            navController.navigate(
-                                R.id.groupListFragment,
-                                null,
-                                androidx.navigation.NavOptions.Builder()
-                                    .setPopUpTo(R.id.groupListFragment, true)
-                                    .setLaunchSingleTop(true)
-                                    .build()
-                            )
-                        }
-                        else -> {
-                            if (!navController.popBackStack()) {
-                                finish()
-                            }
-                        }
-                    }
-                }
-            }
+    /**
+     * Tabs keep their state: switching away saves the tab's back stack and
+     * switching back restores it (no reloads, no flicker).
+     */
+    private fun navigateToTab(destinationId: Int) {
+        navController.navigate(
+            destinationId,
+            null,
+            NavOptions.Builder()
+                .setPopUpTo(R.id.groupListFragment, false, true)
+                .setRestoreState(true)
+                .setLaunchSingleTop(true)
+                .setEnterAnim(R.anim.fade_in)
+                .setExitAnim(R.anim.fade_out)
+                .setPopEnterAnim(R.anim.fade_in)
+                .setPopExitAnim(R.anim.fade_out)
+                .build()
         )
     }
 
-    private fun startNudgeListener() {
-        val uid = FirebaseAuth.getInstance().currentUser?.uid ?: return
-        
-        nudgeListener = FirebaseFirestore.getInstance()
-            .collectionGroup("nudges")
-            .whereEqualTo("nudgedUid", uid)
-            .whereGreaterThan("timestamp",
-                System.currentTimeMillis() - 5000)
-            .addSnapshotListener { snapshot, _ ->
-                snapshot?.documentChanges?.forEach { change ->
-                    if (change.type ==
-                        com.google.firebase.firestore.DocumentChange.Type.ADDED) {
-                        val nudgerName = change.document
-                            .getString("nudgerName") ?: "Someone"
-                        showNudgeNotification(nudgerName)
-                    }
-                }
-            }
-    }
-
-    private fun showNudgeNotification(nudgerName: String) {
-        val channelId = "nudge_channel"
-        val notificationManager = getSystemService(
-            android.content.Context.NOTIFICATION_SERVICE)
-            as android.app.NotificationManager
-
-        if (android.os.Build.VERSION.SDK_INT >=
-            android.os.Build.VERSION_CODES.O) {
-            val channel = android.app.NotificationChannel(
-                channelId, "Nudges",
-                android.app.NotificationManager.IMPORTANCE_HIGH
-            )
-            notificationManager.createNotificationChannel(channel)
-        }
-
-        val notification = androidx.core.app.NotificationCompat
-            .Builder(this, channelId)
-            .setContentTitle("⚡ You got nudged!")
-            .setContentText("$nudgerName nudged you! Time to get back on track.")
-            .setSmallIcon(R.drawable.ic_flame)
-            .setAutoCancel(true)
-            .build()
-
-        notificationManager.notify(
-            System.currentTimeMillis().toInt(), notification)
+    /** Signs out and restarts the activity with a clean back stack. */
+    fun logout() {
+        AuthRepository().logout()
+        startActivity(
+            Intent(this, MainActivity::class.java)
+                .addFlags(Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_CLEAR_TASK)
+        )
+        @Suppress("DEPRECATION")
+        overridePendingTransition(android.R.anim.fade_in, android.R.anim.fade_out)
     }
 
     private fun requestAppPermissions() {
@@ -264,6 +191,10 @@ class MainActivity : AppCompatActivity() {
 
     override fun onDestroy() {
         super.onDestroy()
-        nudgeListener?.remove()
+        if (watcherAcquired) RealtimeWatcher.release()
+    }
+
+    companion object {
+        const val EXTRA_NAVIGATE_TO_GROUP = "navigateToGroupId"
     }
 }

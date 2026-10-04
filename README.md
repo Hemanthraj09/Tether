@@ -122,6 +122,7 @@ groupStats/{gid}
   → daily/{date}/{uid}: hours
   → weekly/{weekKey}/{uid}: hours
   → streaks/{uid}: currentStreak, longestStreak, lastLogDate
+  → nudges/{date}_{fromUid}_{toUid}: nudgerUid, nudgerName, nudgedUid, date, timestamp
 ```
 
 ---

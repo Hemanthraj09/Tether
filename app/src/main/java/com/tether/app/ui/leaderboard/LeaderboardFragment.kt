@@ -7,22 +7,23 @@ import android.view.ViewGroup
 import androidx.core.content.ContextCompat
 import androidx.fragment.app.Fragment
 import androidx.fragment.app.viewModels
+import androidx.lifecycle.Lifecycle
 import androidx.lifecycle.lifecycleScope
-import androidx.navigation.fragment.findNavController
+import androidx.lifecycle.repeatOnLifecycle
 import androidx.recyclerview.widget.LinearLayoutManager
 import com.tether.app.R
 import com.tether.app.databinding.FragmentLeaderboardBinding
+import com.tether.app.utils.TetherToast
+import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.launch
-import kotlinx.coroutines.tasks.await
 
 class LeaderboardFragment : Fragment() {
 
     private var _binding: FragmentLeaderboardBinding? = null
     private val binding get() = _binding!!
     private val viewModel: LeaderboardViewModel by viewModels()
-    private var currentGroupId: String = ""
-    private var isWeeklyMode = true
-    private var currentEntries: List<com.tether.app.data.repository.LeaderboardEntry> = emptyList()
+
+    private lateinit var adapter: LeaderboardAdapter
 
     override fun onCreateView(
         inflater: LayoutInflater,
@@ -40,143 +41,78 @@ class LeaderboardFragment : Fragment() {
     ) {
         super.onViewCreated(view, savedInstanceState)
 
-        binding.leaderboardRecyclerView.layoutManager =
-            LinearLayoutManager(requireContext())
-        binding.leaderboardRecyclerView.adapter =
-            LeaderboardAdapter(currentGroupId, emptyList()) { _, _ -> }
-
-        binding.btnWeekly.background =
-            ContextCompat.getDrawable(requireContext(),
-                R.drawable.bg_toggle_active)
-        binding.btnWeekly.setTextColor(
-            ContextCompat.getColor(requireContext(),
-                R.color.colorTextPrimary))
-
-        binding.btnWeekly.setOnClickListener {
-            isWeeklyMode = true
-            binding.btnWeekly.background =
-                ContextCompat.getDrawable(requireContext(),
-                    R.drawable.bg_toggle_active)
-            binding.btnWeekly.setTextColor(
-                ContextCompat.getColor(requireContext(),
-                    R.color.colorTextPrimary))
-            binding.btnToday.background = null
-            binding.btnToday.setTextColor(
-                ContextCompat.getColor(requireContext(),
-                    R.color.colorTextSecondary))
-            renderEntries(currentEntries)
+        adapter = LeaderboardAdapter { item ->
+            TetherToast.show(requireContext(), "Nudge sent! ⚡")
+            viewModel.sendNudge(item.uid)
         }
+        binding.leaderboardRecyclerView.layoutManager = LinearLayoutManager(requireContext())
+        binding.leaderboardRecyclerView.adapter = adapter
 
-        binding.btnToday.setOnClickListener {
-            isWeeklyMode = false
-            binding.btnToday.background =
-                ContextCompat.getDrawable(requireContext(),
-                    R.drawable.bg_toggle_active)
-            binding.btnToday.setTextColor(
-                ContextCompat.getColor(requireContext(),
-                    R.color.colorTextPrimary))
-            binding.btnWeekly.background = null
-            binding.btnWeekly.setTextColor(
-                ContextCompat.getColor(requireContext(),
-                    R.color.colorTextSecondary))
-            renderEntries(currentEntries)
-        }
-
-        observeLeaderboard()
-        loadLeaderboardForUserGroup()
-    }
-
-    override fun onResume() {
-        super.onResume()
-        if (currentGroupId.isNotEmpty()) {
-            viewModel.loadLeaderboard(currentGroupId)
-        }
-    }
-
-    private fun loadLeaderboardForUserGroup() {
-        val uid = com.google.firebase.auth
-            .FirebaseAuth.getInstance()
-            .currentUser?.uid ?: return
+        binding.btnToday.setOnClickListener { viewModel.setWeeklyMode(false) }
+        binding.btnWeekly.setOnClickListener { viewModel.setWeeklyMode(true) }
+        binding.tvLeaderboardGroup.setOnClickListener { showGroupPicker() }
 
         viewLifecycleOwner.lifecycleScope.launch {
-            try {
-                val userDoc = com.google.firebase
-                    .firestore.FirebaseFirestore
-                    .getInstance()
-                    .collection("users")
-                    .document(uid)
-                    .get()
-                    .await()
-
-                @Suppress("UNCHECKED_CAST")
-                val groupIds = userDoc
-                    .get("groupIds") as? List<String>
-                    ?: emptyList()
-
-                if (groupIds.isNotEmpty()) {
-                    currentGroupId = groupIds.first()
-                    viewModel.loadLeaderboard(
-                        currentGroupId)
+            viewLifecycleOwner.repeatOnLifecycle(Lifecycle.State.STARTED) {
+                launch {
+                    combine(viewModel.groups, viewModel.currentGroup) { groups, current ->
+                        groups to current
+                    }.collect { (groups, current) ->
+                        val multiple = (groups?.size ?: 0) > 1
+                        binding.tvLeaderboardGroup.visibility =
+                            if (current != null) View.VISIBLE else View.INVISIBLE
+                        binding.tvLeaderboardGroup.text =
+                            if (multiple) "${current?.name} ▾" else current?.name ?: ""
+                        binding.tvLeaderboardGroup.isClickable = multiple
+                        binding.tvLeaderboardEmpty.visibility =
+                            if (groups != null && groups.isEmpty()) View.VISIBLE else View.GONE
+                    }
                 }
-            } catch (e: Exception) {
-                // keep showing existing data
-            }
-        }
-    }
-
-    private fun renderEntries(entries: List<com.tether.app.data.repository.LeaderboardEntry>) {
-        currentEntries = entries
-        val sorted = if (isWeeklyMode) {
-            entries.sortedByDescending { it.hours }
-        } else {
-            entries.sortedByDescending { it.todayHours }
-        }
-        val items = sorted.mapIndexed { index, entry ->
-            LeaderboardItem(
-                id = index + 1,
-                name = entry.name,
-                initials = entry.initials,
-                hours = if (isWeeklyMode) entry.hours else entry.todayHours,
-                streak = entry.streak,
-                avatarColorHex = entry.avatarColorHex,
-                isCurrentUser = entry.isCurrentUser,
-                uid = entry.uid,
-                hasNudgedToday = entry.hasNudgedToday,
-                paceLabel = if (isWeeklyMode) "" else entry.paceLabel
-            )
-        }
-        val adapter = binding.leaderboardRecyclerView.adapter as? LeaderboardAdapter
-        if (adapter == null) {
-            binding.leaderboardRecyclerView.adapter = LeaderboardAdapter(currentGroupId, items) { _, _ -> }
-        } else {
-            adapter.updateItems(items)
-        }
-    }
-
-    private fun observeLeaderboard() {
-        viewLifecycleOwner.lifecycleScope.launch {
-            viewModel.uiState.collect { state ->
-                when (state) {
-                    is LeaderboardUiState.Loading -> {
-                        // keep showing existing list
+                launch {
+                    combine(viewModel.entries, viewModel.weeklyMode) { entries, weekly ->
+                        entries to weekly
+                    }.collect { (entries, weekly) ->
+                        renderToggle(weekly)
+                        if (entries != null) render(entries, weekly)
                     }
-                    is LeaderboardUiState.Success -> {
-                        renderEntries(state.entries)
-                    }
-                    is LeaderboardUiState.Empty -> {
-                        val adapter = binding.leaderboardRecyclerView.adapter as? LeaderboardAdapter
-                        if (adapter == null) {
-                            binding.leaderboardRecyclerView.adapter = LeaderboardAdapter(currentGroupId, emptyList()) { _, _ -> }
-                        } else {
-                            adapter.updateItems(emptyList())
-                        }
-                    }
-                    is LeaderboardUiState.Error -> {
-                        // keep showing existing dummy data
+                }
+                launch {
+                    viewModel.messages.collect { message ->
+                        TetherToast.show(requireContext(), message, isError = true)
                     }
                 }
             }
         }
+    }
+
+    private fun render(
+        entries: List<com.tether.app.data.repository.LeaderboardEntry>,
+        weekly: Boolean
+    ) {
+        val sorted = if (weekly) entries.sortedByDescending { it.hours }
+            else entries.sortedByDescending { it.todayHours }
+        adapter.submitList(sorted.toLeaderboardItems(weekly))
+    }
+
+    private fun renderToggle(weekly: Boolean) {
+        val active = ContextCompat.getDrawable(requireContext(), R.drawable.bg_toggle_active)
+        val primary = ContextCompat.getColor(requireContext(), R.color.colorTextPrimary)
+        val secondary = ContextCompat.getColor(requireContext(), R.color.colorTextSecondary)
+        binding.btnWeekly.background = if (weekly) active else null
+        binding.btnWeekly.setTextColor(if (weekly) primary else secondary)
+        binding.btnToday.background = if (weekly) null else active
+        binding.btnToday.setTextColor(if (weekly) secondary else primary)
+    }
+
+    private fun showGroupPicker() {
+        val groups = viewModel.groups.value ?: return
+        if (groups.size <= 1) return
+        android.app.AlertDialog.Builder(requireContext())
+            .setTitle("Switch Group")
+            .setItems(groups.map { it.name }.toTypedArray()) { _, which ->
+                viewModel.selectGroup(groups[which].id)
+            }
+            .show()
     }
 
     override fun onDestroyView() {

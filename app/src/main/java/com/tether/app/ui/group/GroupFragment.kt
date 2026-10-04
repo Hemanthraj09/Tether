@@ -117,6 +117,7 @@ class GroupFragment : Fragment() {
                             requireContext(),
                             state.message,
                             isError = true)
+                        viewModel.consumeError()
                     }
                     is GroupState.Idle -> {
                         binding.btnCreateGroup

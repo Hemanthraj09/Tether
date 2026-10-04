@@ -20,6 +20,7 @@ import com.google.android.gms.common.api.ApiException
 import com.tether.app.R
 import com.tether.app.databinding.FragmentAuthBinding
 import com.tether.app.utils.TetherToast
+import com.tether.app.utils.navigateSafe
 import kotlinx.coroutines.launch
 
 class AuthFragment : Fragment() {
@@ -79,6 +80,26 @@ class AuthFragment : Fragment() {
 
         binding.btnAuthPrimary.setOnClickListener {
             handleAuthAction()
+        }
+
+        binding.tvForgotPassword.setOnClickListener {
+            val email = binding.etEmail.text.toString().trim()
+            if (email.isEmpty()) {
+                binding.etEmail.error = "Enter your email first"
+                binding.etEmail.requestFocus()
+                return@setOnClickListener
+            }
+            viewLifecycleOwner.lifecycleScope.launch {
+                val result = viewModel.sendPasswordReset(email)
+                if (_binding == null) return@launch
+                if (result.isSuccess) {
+                    TetherToast.show(requireContext(), "Password reset link sent to $email")
+                } else {
+                    TetherToast.show(requireContext(),
+                        result.exceptionOrNull()?.message ?: "Couldn't send reset email",
+                        isError = true)
+                }
+            }
         }
 
         binding.btnGoogleSignIn.setOnClickListener {
@@ -144,7 +165,7 @@ class AuthFragment : Fragment() {
                     is AuthState.Success -> {
                         binding.btnAuthPrimary.isEnabled =
                             true
-                        findNavController().navigate(
+                        findNavController().navigateSafe(
                             R.id.action_auth_to_groupList)
                     }
                     is AuthState.Error -> {
@@ -155,6 +176,7 @@ class AuthFragment : Fragment() {
                             requireContext(),
                             state.message,
                             isError = true)
+                        viewModel.consumeError()
                     }
                     is AuthState.Idle -> {
                         binding.btnAuthPrimary.isEnabled =

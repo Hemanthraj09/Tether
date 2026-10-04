@@ -11,6 +11,10 @@ import com.tether.app.R
 
 object TetherToast {
 
+    // Only one toast at a time: a new message replaces the old one instead of
+    // queueing behind it (queued toasts made feedback feel slow).
+    private var current: Toast? = null
+
     fun show(
         context: Context,
         message: String,
@@ -41,12 +45,15 @@ object TetherToast {
                         context, R.color.colorAccent))
         }
 
-        val toast = Toast(context)
+        current?.cancel()
+        val toast = Toast(context.applicationContext)
         toast.duration = Toast.LENGTH_SHORT
+        @Suppress("DEPRECATION")
         toast.view = layout
         toast.setGravity(
             Gravity.BOTTOM or Gravity.CENTER_HORIZONTAL,
             0, 120)
         toast.show()
+        current = toast
     }
 }

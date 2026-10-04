@@ -1,24 +1,31 @@
 package com.tether.app.ui.home
 
+import android.content.ClipData
+import android.content.ClipboardManager
+import android.content.Context
 import android.os.Bundle
 import android.view.LayoutInflater
 import android.view.View
 import android.view.ViewGroup
 import androidx.fragment.app.Fragment
 import androidx.fragment.app.viewModels
+import androidx.lifecycle.Lifecycle
 import androidx.lifecycle.lifecycleScope
+import androidx.lifecycle.repeatOnLifecycle
 import androidx.navigation.fragment.findNavController
 import androidx.recyclerview.widget.LinearLayoutManager
 import com.tether.app.R
 import com.tether.app.databinding.FragmentGroupFeedBinding
+import com.tether.app.timer.TetherTimerService
+import com.tether.app.timer.TimerControlFragment
 import com.tether.app.timer.TimerModeDialogFragment
 import com.tether.app.timer.TimerNoteDialogFragment
 import com.tether.app.ui.leaderboard.LeaderboardAdapter
-import com.tether.app.ui.leaderboard.LeaderboardItem
+import com.tether.app.ui.leaderboard.toLeaderboardItems
 import com.tether.app.ui.log.LogBottomSheetFragment
 import com.tether.app.utils.TetherToast
+import com.tether.app.utils.showOnce
 import kotlinx.coroutines.launch
-import kotlinx.coroutines.tasks.await
 
 class GroupFeedFragment : Fragment() {
 
@@ -26,10 +33,7 @@ class GroupFeedFragment : Fragment() {
     private val binding get() = _binding!!
     private val viewModel: GroupFeedViewModel by viewModels()
 
-    private var groupId: String = ""
-    private var groupName: String = ""
-    private var groupGoal: String = ""
-    private var groupInviteCode: String = ""
+    private lateinit var membersAdapter: LeaderboardAdapter
 
     override fun onCreateView(
         inflater: LayoutInflater,
@@ -37,9 +41,6 @@ class GroupFeedFragment : Fragment() {
         savedInstanceState: Bundle?
     ): View {
         _binding = FragmentGroupFeedBinding.inflate(inflater, container, false)
-        groupId = arguments?.getString("groupId") ?: ""
-        groupName = arguments?.getString("groupName") ?: ""
-        groupGoal = arguments?.getString("groupGoal") ?: ""
         return binding.root
     }
 
@@ -49,53 +50,17 @@ class GroupFeedFragment : Fragment() {
     ) {
         super.onViewCreated(view, savedInstanceState)
 
-        binding.tvFeedGroupName.text = groupName
-        binding.tvFeedGroupGoal.text = groupGoal
+        // Header from the navigation args right away; the live group doc refines it.
+        binding.tvFeedGroupName.text = arguments?.getString("groupName") ?: ""
+        binding.tvFeedGroupGoal.text = arguments?.getString("groupGoal") ?: ""
+        binding.btnGroupInfo.visibility = View.GONE
 
-        viewLifecycleOwner.lifecycleScope.launch {
-            try {
-                val groupDoc = com.google.firebase
-                    .firestore.FirebaseFirestore.getInstance()
-                    .collection("groups")
-                    .document(groupId)
-                    .get()
-                    .await()
-
-                val memberCount = (groupDoc.get("members")
-                        as? List<*>)?.size ?: 1
-                binding.tvFeedGroupGoal.text =
-                    "$groupGoal • $memberCount member" +
-                            if (memberCount != 1) "s" else ""
-            } catch (e: Exception) {
-                binding.tvFeedGroupGoal.text = groupGoal
-            }
+        membersAdapter = LeaderboardAdapter { item ->
+            TetherToast.show(requireContext(), "Nudge sent! ⚡")
+            viewModel.sendNudge(item.uid)
         }
-
-        viewLifecycleOwner.lifecycleScope.launch {
-            try {
-                val groupDoc = com.google.firebase.firestore.FirebaseFirestore.getInstance()
-                    .collection("groups")
-                    .document(groupId)
-                    .get()
-                    .await()
-                groupInviteCode = groupDoc.getString("inviteCode") ?: ""
-            } catch (e: Exception) {}
-        }
-
-        binding.btnGroupInfo.setOnClickListener {
-            if (groupInviteCode.isEmpty()) return@setOnClickListener
-            val popup = android.widget.PopupMenu(requireContext(), binding.btnGroupInfo)
-            popup.menu.add("Invite Code: $groupInviteCode")
-            popup.show()
-        }
-
-        setupRecyclerViews()
-        observeMemberStats()
-        observeLogState()
-        observeGroupAction()
-
-        viewModel.startListeningToFeed(groupId)
-        viewModel.checkIfCreator(groupId)
+        binding.membersRecyclerView.layoutManager = LinearLayoutManager(requireContext())
+        binding.membersRecyclerView.adapter = membersAdapter
 
         binding.btnFeedBack.setOnClickListener {
             findNavController().popBackStack()
@@ -105,241 +70,141 @@ class GroupFeedFragment : Fragment() {
             showGroupOptionsMenu()
         }
 
+        binding.btnGroupInfo.setOnClickListener {
+            showInviteCode()
+        }
+
         binding.fabLogFeed.setOnClickListener {
-            showLogBottomSheet()
+            LogBottomSheetFragment.newInstance(viewModel.groupId)
+                .showOnce(childFragmentManager, LogBottomSheetFragment.TAG)
         }
 
         binding.btnStartSession.setOnClickListener {
-            if (com.tether.app.timer.TetherTimerService.isRunning) {
-                com.tether.app.timer.TimerControlFragment.newInstance()
-                    .show(childFragmentManager, "TimerControl")
+            if (TetherTimerService.isRunning) {
+                TimerControlFragment.newInstance()
+                    .showOnce(childFragmentManager, TimerControlFragment.TAG)
             } else {
-                val dialog = TimerModeDialogFragment.newInstance(groupId)
-                dialog.show(childFragmentManager, "TimerModeDialog")
-                // Optimistically update to "Session Active" immediately
-                binding.btnStartSession.text = "Session Active ●"
-                binding.btnStartSession.chipBackgroundColor =
-                    android.content.res.ColorStateList.valueOf(
-                        android.graphics.Color.parseColor("#1A1A1A")
-                    )
+                TimerModeDialogFragment.newInstance(viewModel.groupId)
+                    .showOnce(childFragmentManager, TimerModeDialogFragment.TAG)
             }
         }
 
-        registerTimerReceiver()
-        childFragmentManager.setFragmentResultListener("timer_stopped", viewLifecycleOwner) { _, _ ->
-            updateSessionButton(forceInactive = true)
+        // The control sheet reports the stopped session here; the note dialog
+        // logs it to the group the session belongs to.
+        childFragmentManager.setFragmentResultListener(
+            TimerControlFragment.RESULT_TIMER_STOPPED, viewLifecycleOwner
+        ) { _, result ->
+            val focusSeconds = result.getLong(TimerControlFragment.RESULT_FOCUS_SECONDS, 0L)
+            val sessionGroupId = result.getString(TimerControlFragment.RESULT_GROUP_ID)
+                ?.takeIf { it.isNotEmpty() } ?: viewModel.groupId
+            TimerNoteDialogFragment.newInstance(focusSeconds, sessionGroupId)
+                .showOnce(childFragmentManager, TimerNoteDialogFragment.TAG)
         }
-        updateSessionButton()
+
+        observeViewModel()
     }
 
-    override fun onResume() {
-        super.onResume()
-        updateSessionButton()
-        if (groupId.isNotEmpty()) {
-            viewModel.startListeningToFeed(groupId)
-        }
-    }
-
-    fun updateSessionButton(forceInactive: Boolean = false) {
-        val isRunning = !forceInactive && com.tether.app.timer.TetherTimerService.isRunning
-        android.util.Log.d("TetherDebug", "updateSessionButton called: forceInactive=$forceInactive, isRunning=${com.tether.app.timer.TetherTimerService.isRunning}")
-        binding.btnStartSession.post {
-            if (isRunning) {
-                binding.btnStartSession.text = "Session Active ●"
-                binding.btnStartSession.setChipBackgroundColorResource(R.color.colorSurface)
-            } else {
-                binding.btnStartSession.text = "Start Session"
-                binding.btnStartSession.setChipBackgroundColorResource(R.color.colorAccent)
-            }
-        }
-    }
-
-    private val timerReceiver = object : android.content.BroadcastReceiver() {
-        override fun onReceive(context: android.content.Context?, intent: android.content.Intent?) {
-            android.util.Log.d("TetherDebug", "Broadcast received: ${intent?.action}")
-            when (intent?.action) {
-                com.tether.app.timer.TetherTimerService.ACTION_TIMER_FINISHED -> {
-                    val focusSeconds = intent.getLongExtra(com.tether.app.timer.TetherTimerService.EXTRA_FOCUS_SECONDS, 0L)
-                    val finishedGroupId = intent.getStringExtra(com.tether.app.timer.TetherTimerService.EXTRA_GROUP_ID) ?: ""
-                    
-                    if (finishedGroupId == groupId) {
-                        val dialog = TimerNoteDialogFragment.newInstance(focusSeconds, finishedGroupId)
-                        dialog.show(childFragmentManager, "TimerNoteDialog")
-                        dialog.lifecycle.addObserver(object : androidx.lifecycle.DefaultLifecycleObserver {
-                            override fun onDestroy(owner: androidx.lifecycle.LifecycleOwner) {
-                                updateSessionButton(forceInactive = true)
-                            }
-                        })
+    private fun observeViewModel() {
+        viewLifecycleOwner.lifecycleScope.launch {
+            viewLifecycleOwner.repeatOnLifecycle(Lifecycle.State.STARTED) {
+                launch {
+                    viewModel.group.collect { group ->
+                        if (group == null) return@collect
+                        binding.tvFeedGroupName.text = group.name
+                        val count = group.members.size
+                        binding.tvFeedGroupGoal.text =
+                            "${group.goalType} • $count member" + if (count != 1) "s" else ""
+                        binding.btnGroupInfo.visibility =
+                            if (group.inviteCode.isNotEmpty()) View.VISIBLE else View.GONE
                     }
                 }
-            }
-        }
-    }
-
-    private fun registerTimerReceiver() {
-        val filter = android.content.IntentFilter().apply {
-            addAction(com.tether.app.timer.TetherTimerService.ACTION_TIMER_FINISHED)
-        }
-        androidx.core.content.ContextCompat.registerReceiver(
-            requireContext(),
-            timerReceiver,
-            filter,
-            androidx.core.content.ContextCompat.RECEIVER_NOT_EXPORTED
-        )
-    }
-
-    private fun setupRecyclerViews() {
-        binding.membersRecyclerView.layoutManager =
-            LinearLayoutManager(requireContext())
-    }
-
-    private fun observeMemberStats() {
-        viewLifecycleOwner.lifecycleScope.launch {
-            viewModel.memberStats.collect { stats ->
-                val items = stats.mapIndexed { index, entry ->
-                    LeaderboardItem(
-                        id = index + 1,
-                        name = entry.name,
-                        initials = entry.initials,
-                        hours = entry.todayHours,
-                        todayHours = entry.todayHours,
-                        streak = entry.streak,
-                        avatarColorHex = entry.avatarColorHex,
-                        isCurrentUser = entry.isCurrentUser,
-                        paceLabel = entry.paceLabel,
-                        uid = entry.uid,
-                        hasNudgedToday = entry.hasNudgedToday
-                    )
+                launch {
+                    viewModel.memberStats.collect { stats ->
+                        if (stats != null) membersAdapter.submitList(stats.toLeaderboardItems())
+                    }
                 }
-                
-                val adapter = binding.membersRecyclerView.adapter as? LeaderboardAdapter
-                if (adapter == null) {
-                    binding.membersRecyclerView.adapter = LeaderboardAdapter(groupId, items) { gid, nudgedUid ->
-                        viewLifecycleOwner.lifecycleScope.launch {
-                            val repo = com.tether.app.data.repository.NudgeRepository()
-                            val result = repo.sendNudge(gid, nudgedUid)
-                            if (result.isSuccess) {
-                                TetherToast.show(requireContext(), "Nudge sent! ⚡")
-                                // Immediately update the item locally
-                                val currentAdapter = binding.membersRecyclerView.adapter as? LeaderboardAdapter
-                                currentAdapter?.markNudged(nudgedUid)
-                            } else {
-                                TetherToast.show(requireContext(),
-                                    result.exceptionOrNull()?.message ?: "Already nudged today",
-                                    isError = true)
+                launch {
+                    TetherTimerService.activeGroupId.collect { active ->
+                        updateSessionButton(isRunning = active != null)
+                    }
+                }
+                launch {
+                    viewModel.events.collect { event ->
+                        when (event) {
+                            is GroupFeedEvent.Message ->
+                                TetherToast.show(requireContext(), event.text, event.isError)
+                            GroupFeedEvent.LeftGroup -> {
+                                TetherToast.show(requireContext(), "Done!")
+                                findNavController().popBackStack(R.id.groupListFragment, false)
                             }
                         }
                     }
-                } else {
-                    adapter.updateItems(items)
                 }
             }
         }
     }
 
-    private fun observeLogState() {
-        viewLifecycleOwner.lifecycleScope.launch {
-            viewModel.logState.collect { state ->
-                when (state) {
-                    is LogUiState.Success -> {
-                        TetherToast.show(
-                            requireContext(),
-                            "Logged successfully! 🔥")
-                    }
-                    is LogUiState.Error -> {
-                        TetherToast.show(
-                            requireContext(),
-                            state.message,
-                            isError = true)
-                    }
-                    else -> {}
-                }
-            }
+    private fun updateSessionButton(isRunning: Boolean) {
+        if (isRunning) {
+            binding.btnStartSession.text = "Session Active ●"
+            binding.btnStartSession.setChipBackgroundColorResource(R.color.colorSurface)
+        } else {
+            binding.btnStartSession.text = "Start Session"
+            binding.btnStartSession.setChipBackgroundColorResource(R.color.colorAccent)
         }
     }
 
-    private fun observeGroupAction() {
-        viewLifecycleOwner.lifecycleScope.launch {
-            viewModel.groupActionState.collect { state ->
-                when (state) {
-                    is GroupActionState.Success -> {
-                        viewModel.resetGroupActionState()
-                        TetherToast.show(requireContext(), "Done!")
-                        findNavController().navigate(
-                            R.id.groupListFragment,
-                            null,
-                            androidx.navigation.NavOptions.Builder()
-                                .setPopUpTo(R.id.groupListFragment, false)
-                                .setLaunchSingleTop(true)
-                                .build()
-                        )
-                    }
-                    is GroupActionState.Error -> {
-                        viewModel.resetGroupActionState()
-                        TetherToast.show(requireContext(), state.message, isError = true)
-                    }
-                    else -> {}
-                }
-            }
+    private fun showInviteCode() {
+        val code = viewModel.group.value?.inviteCode ?: return
+        if (code.isEmpty()) return
+        val popup = android.widget.PopupMenu(requireContext(), binding.btnGroupInfo)
+        popup.menu.add("Invite Code: $code  (tap to copy)")
+        popup.setOnMenuItemClickListener {
+            val clipboard = requireContext().getSystemService(Context.CLIPBOARD_SERVICE) as ClipboardManager
+            clipboard.setPrimaryClip(ClipData.newPlainText("Tether invite code", code))
+            TetherToast.show(requireContext(), "Invite code copied")
+            true
         }
-    }
-
-    private fun showLogBottomSheet() {
-        val bottomSheet = LogBottomSheetFragment.newInstance(groupId)
-        bottomSheet.show(parentFragmentManager, "LogBottomSheet")
+        popup.show()
     }
 
     private fun showGroupOptionsMenu() {
-        val isCreator = viewModel.isCreator.value
-
-        if (isCreator) {
+        // Wait for the group to load so the creator never sees "Leave".
+        if (viewModel.group.value == null) return
+        val groupName = binding.tvFeedGroupName.text.toString()
+        if (viewModel.isCreator) {
             android.app.AlertDialog.Builder(requireContext())
                 .setTitle(groupName)
-                .setItems(arrayOf("Delete Group")) { _, which ->
-                    when (which) {
-                        0 -> confirmDeleteGroup()
-                    }
-                }
+                .setItems(arrayOf("Delete Group")) { _, _ -> confirmDeleteGroup(groupName) }
                 .show()
         } else {
             android.app.AlertDialog.Builder(requireContext())
                 .setTitle(groupName)
-                .setItems(arrayOf("Leave Group")) { _, which ->
-                    when (which) {
-                        0 -> confirmLeaveGroup()
-                    }
-                }
+                .setItems(arrayOf("Leave Group")) { _, _ -> confirmLeaveGroup(groupName) }
                 .show()
         }
     }
 
-    private fun confirmDeleteGroup() {
+    private fun confirmDeleteGroup(groupName: String) {
         android.app.AlertDialog.Builder(requireContext())
             .setTitle("Delete Group")
             .setMessage("Are you sure you want to delete \"$groupName\"? This cannot be undone.")
-            .setPositiveButton("Delete") { _, _ ->
-                viewModel.deleteGroup(groupId)
-            }
+            .setPositiveButton("Delete") { _, _ -> viewModel.deleteGroup() }
             .setNegativeButton("Cancel", null)
             .show()
     }
 
-    private fun confirmLeaveGroup() {
+    private fun confirmLeaveGroup(groupName: String) {
         android.app.AlertDialog.Builder(requireContext())
             .setTitle("Leave Group")
             .setMessage("Are you sure you want to leave \"$groupName\"?")
-            .setPositiveButton("Leave") { _, _ ->
-                viewModel.leaveGroup(groupId)
-            }
+            .setPositiveButton("Leave") { _, _ -> viewModel.leaveGroup() }
             .setNegativeButton("Cancel", null)
             .show()
     }
 
     override fun onDestroyView() {
         super.onDestroyView()
-        try {
-            requireContext().unregisterReceiver(timerReceiver)
-        } catch (e: Exception) {}
         _binding = null
     }
 }

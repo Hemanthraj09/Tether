@@ -1,13 +1,24 @@
 package com.tether.app.data.repository
 
 import com.google.firebase.auth.FirebaseAuth
+import com.google.firebase.firestore.FieldPath
+import com.google.firebase.firestore.FieldValue
 import com.google.firebase.firestore.FirebaseFirestore
+import com.google.firebase.firestore.SetOptions
+import com.tether.app.data.UserCache
 import com.tether.app.data.model.Group
 import com.tether.app.data.model.Log
+import com.tether.app.data.snapshotFlow
+import com.tether.app.utils.DateKeys
+import com.tether.app.utils.Formatters
+import kotlinx.coroutines.ExperimentalCoroutinesApi
+import kotlinx.coroutines.flow.Flow
+import kotlinx.coroutines.flow.combine
+import kotlinx.coroutines.flow.distinctUntilChanged
+import kotlinx.coroutines.flow.flatMapLatest
+import kotlinx.coroutines.flow.flowOf
+import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.tasks.await
-import java.text.SimpleDateFormat
-import java.util.Date
-import java.util.Locale
 
 class GroupRepository {
 
@@ -23,32 +34,28 @@ class GroupRepository {
         isSolo: Boolean
     ): Result<Group> {
         return try {
-            val inviteCode = if (isSolo) ""
-                else generateInviteCode()
-
-            val groupRef = firestore
-                .collection("groups")
-                .document()
+            val uid = currentUid
+            val inviteCode = if (isSolo) "" else generateUniqueInviteCode()
+            val groupRef = firestore.collection("groups").document()
 
             val group = Group(
                 id = groupRef.id,
                 name = name,
                 goalType = goalType,
-                members = listOf(currentUid),
+                members = listOf(uid),
                 inviteCode = inviteCode,
-                createdBy = currentUid,
+                createdBy = uid,
                 isSolo = isSolo,
                 createdAt = System.currentTimeMillis()
             )
 
-            groupRef.set(group).await()
-
-            firestore.collection("users")
-                .document(currentUid)
-                .update("groupIds",
-                    com.google.firebase.firestore
-                        .FieldValue.arrayUnion(groupRef.id))
-                .await()
+            // Group + membership written atomically.
+            firestore.batch().apply {
+                set(groupRef, group)
+                set(firestore.collection("users").document(uid),
+                    mapOf("groupIds" to FieldValue.arrayUnion(groupRef.id)),
+                    SetOptions.merge())
+            }.commit().await()
 
             writeSystemLog(groupRef.id,
                 if (isSolo) "Started a solo journey! 🚀"
@@ -64,87 +71,132 @@ class GroupRepository {
         inviteCode: String
     ): Result<Group> {
         return try {
+            val uid = currentUid
+            // Accept codes typed with spaces/dashes (the hint shows "X7Y9-Z2").
+            val code = inviteCode.uppercase().filter { it.isLetterOrDigit() }
+            if (code.isEmpty()) {
+                return Result.failure(Exception("Please enter an invite code"))
+            }
+
             val querySnapshot = firestore
                 .collection("groups")
-                .whereEqualTo("inviteCode",
-                    inviteCode.uppercase().trim())
+                .whereEqualTo("inviteCode", code)
+                .limit(1)
                 .get()
                 .await()
 
-            if (querySnapshot.isEmpty) {
-                return Result.failure(
-                    Exception("Invalid invite code. " +
-                        "Please check and try again."))
-            }
-
-            val groupDoc = querySnapshot.documents[0]
-            val group = groupDoc.toObject(Group::class.java)
+            val groupRef = querySnapshot.documents.firstOrNull()?.reference
                 ?: return Result.failure(
-                    Exception("Group not found."))
+                    Exception("Invalid invite code. Please check and try again."))
 
-            if (currentUid in group.members) {
-                return Result.failure(
-                    Exception("You are already " +
-                        "in this group."))
+            // Transaction: the 6-member cap can't be exceeded by two people
+            // joining at the same moment.
+            var errorMessage: String? = null
+            val joined = firestore.runTransaction { tx ->
+                val group = tx.get(groupRef).toObject(Group::class.java)
+                when {
+                    group == null -> {
+                        errorMessage = "Group not found."
+                        null
+                    }
+                    uid in group.members -> {
+                        errorMessage = "You are already in this group."
+                        null
+                    }
+                    group.members.size >= MAX_MEMBERS -> {
+                        errorMessage = "This group is full. Maximum 6 members allowed."
+                        null
+                    }
+                    else -> {
+                        tx.update(groupRef, "members", FieldValue.arrayUnion(uid))
+                        tx.set(firestore.collection("users").document(uid),
+                            mapOf("groupIds" to FieldValue.arrayUnion(groupRef.id)),
+                            SetOptions.merge())
+                        group
+                    }
+                }
+            }.await()
+
+            if (joined == null) {
+                return Result.failure(Exception(errorMessage ?: "Failed to join group"))
             }
 
-            if (group.members.size >= 6) {
-                return Result.failure(
-                    Exception("This group is full. Maximum 6 members allowed."))
-            }
-
-            firestore.collection("groups")
-                .document(group.id)
-                .update("members",
-                    com.google.firebase.firestore
-                        .FieldValue.arrayUnion(currentUid))
-                .await()
-
-            firestore.collection("users")
-                .document(currentUid)
-                .update("groupIds",
-                    com.google.firebase.firestore
-                        .FieldValue.arrayUnion(group.id))
-                .await()
-
-            writeSystemLog(group.id, "Joined the group! 👋")
-
-            Result.success(group)
+            writeSystemLog(joined.id, "Joined the group! 👋")
+            Result.success(joined)
         } catch (e: Exception) {
             Result.failure(e)
         }
     }
 
-    suspend fun getUserGroups(): Result<List<Group>> {
-        return try {
-            val userDoc = firestore
-                .collection("users")
-                .document(currentUid)
-                .get()
-                .await()
+    /**
+     * Live list of the signed-in user's groups, in the order they joined.
+     * Emits cached data first, so the home screen shows up instantly.
+     */
+    @OptIn(ExperimentalCoroutinesApi::class)
+    fun observeUserGroups(): Flow<List<Group>> {
+        val uid = currentUid
+        if (uid.isEmpty()) return flowOf(emptyList())
 
-            @Suppress("UNCHECKED_CAST")
-            val groupIds = userDoc
-                .get("groupIds") as? List<String>
-                ?: emptyList()
-
-            if (groupIds.isEmpty()) {
-                return Result.success(emptyList())
+        val userRef = firestore.collection("users").document(uid)
+        return userRef.snapshotFlow()
+            .map { snapshot ->
+                @Suppress("UNCHECKED_CAST")
+                (snapshot?.get("groupIds") as? List<String>)?.distinct() ?: emptyList()
             }
+            .distinctUntilChanged()
+            .flatMapLatest { groupIds ->
+                if (groupIds.isEmpty()) {
+                    flowOf(emptyList())
+                } else {
+                    val chunkFlows = groupIds.chunked(10).map { chunk ->
+                        firestore.collection("groups")
+                            .whereIn(FieldPath.documentId(), chunk)
+                            .snapshotFlow()
+                            .map { snapshot ->
+                                if (snapshot != null && !snapshot.metadata.isFromCache) {
+                                    removeDeletedGroupIds(chunk, snapshot.documents.map { it.id })
+                                }
+                                snapshot?.documents
+                                    ?.mapNotNull { it.toObject(Group::class.java) }
+                                    ?: emptyList()
+                            }
+                    }
+                    combine(chunkFlows) { chunks ->
+                        val byId = chunks.flatMap { it }.associateBy { it.id }
+                        groupIds.mapNotNull { byId[it] }
+                    }
+                }
+            }
+            .distinctUntilChanged()
+    }
 
-            val groups = groupIds.map { gid ->
-                firestore.collection("groups")
-                    .document(gid)
-                    .get()
-                    .await()
-                    .toObject(Group::class.java)
-                    ?: Group()
-            }.filter { it.id.isNotEmpty() }
+    /**
+     * When a group is deleted, other members still have its id in their
+     * groupIds (security rules only let a user edit their own doc), so each
+     * user removes dangling ids from their own document.
+     */
+    private fun removeDeletedGroupIds(requested: List<String>, found: List<String>) {
+        val missing = requested - found.toSet()
+        if (missing.isEmpty()) return
+        firestore.collection("users").document(currentUid)
+            .update("groupIds", FieldValue.arrayRemove(*missing.toTypedArray()))
+    }
 
-            Result.success(groups)
-        } catch (e: Exception) {
-            Result.failure(e)
+    private suspend fun generateUniqueInviteCode(): String {
+        repeat(5) {
+            val code = generateInviteCode()
+            val taken = try {
+                !firestore.collection("groups")
+                    .whereEqualTo("inviteCode", code)
+                    .limit(1)
+                    .get().await()
+                    .isEmpty
+            } catch (e: Exception) {
+                false
+            }
+            if (!taken) return code
         }
+        return generateInviteCode()
     }
 
     private fun generateInviteCode(): String {
@@ -159,42 +211,18 @@ class GroupRepository {
         note: String
     ) {
         try {
-            val userDoc = firestore
-                .collection("users")
-                .document(currentUid)
-                .get()
-                .await()
-
-            val name = userDoc.getString("name") ?: "New User"
-            val initials = name.split(" ")
-                .mapNotNull { it.firstOrNull()?.toString() }
-                .take(2).joinToString("").uppercase()
-
-            val avatarColors = listOf(
-                "#3B82F6", "#22C55E", "#A855F7",
-                "#EC4899", "#EAB308", "#EF4444",
-                "#F97316", "#06B6D4"
-            )
-            val avatarColor = avatarColors[
-                currentUid.hashCode().and(0x7fffffff)
-                    .rem(avatarColors.size)]
-
-            val logRef = firestore
-                .collection("logs")
-                .document()
-
-            val sdf = SimpleDateFormat(
-                "yyyy-MM-dd", Locale.getDefault())
-            val today = sdf.format(Date())
+            val uid = currentUid
+            val name = UserCache.currentUserName()
+            val logRef = firestore.collection("logs").document()
 
             val log = Log(
                 id = logRef.id,
-                userId = currentUid,
+                userId = uid,
                 groupId = groupId,
                 userName = name,
-                userInitials = initials,
-                avatarColorHex = avatarColor,
-                date = today,
+                userInitials = Formatters.initials(name),
+                avatarColorHex = Formatters.avatarColor(uid),
+                date = DateKeys.today(),
                 value = 0.0,
                 note = note,
                 createdAt = System.currentTimeMillis()
@@ -203,5 +231,9 @@ class GroupRepository {
         } catch (e: Exception) {
             // silent fail for system logs
         }
+    }
+
+    companion object {
+        const val MAX_MEMBERS = 6
     }
 }

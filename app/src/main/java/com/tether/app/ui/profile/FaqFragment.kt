@@ -27,8 +27,8 @@ class FaqFragment : Fragment() {
             "How do I invite friends?" to "After creating a group, tap the ⓘ icon on the group feed to see your invite code. Share it with friends and they can join from the home screen.",
             "How does the streak work?" to "Log at least some hours every day to keep your streak alive. Missing a day resets it to 0. Streaks are per group, not global.",
             "What does the nudge do?" to "Tap someone's avatar on the leaderboard or group feed to send them a nudge notification. You can only nudge each person once per day.",
-            "How does the timer work?" to "Tap 'Start Session' on the group feed. Choose Stopwatch for open-ended sessions or Pomodoro for 25-minute focus blocks with 5-minute breaks. The timer runs in the background.",
-            "Why did my hours reset?" to "Hours reset every day at midnight. The leaderboard shows today's hours by default. Switch to 'This Week' to see your weekly total.",
+            "How does the timer work?" to "Tap 'Start Session' on the group feed. Choose Stopwatch for open-ended sessions or Pomodoro for 25/5 or 50/10 focus/break blocks. The timer keeps running in the background; stop it when you're done and only your focus time is logged.",
+            "Why did my hours reset?" to "Hours reset every day at midnight. The leaderboard shows today's hours by default. Switch to 'This Week' to see your weekly total, and tap the group name to switch groups.",
             "Can I be in multiple groups?" to "Yes! You can create or join multiple groups, each with different goals and friends.",
             "How do I leave or delete a group?" to "Long press a group card on the home screen. If you created the group you can delete it; otherwise you can leave it. Deleting a group removes it for all members. Maximum 6 members per group."
         )

@@ -76,6 +76,16 @@ class AuthRepository {
 
     fun logout() {
         auth.signOut()
+        com.tether.app.data.UserCache.clear()
+    }
+
+    suspend fun sendPasswordReset(email: String): Result<Unit> {
+        return try {
+            auth.sendPasswordResetEmail(email).await()
+            Result.success(Unit)
+        } catch (e: Exception) {
+            Result.failure(e)
+        }
     }
 
     suspend fun googleSignIn(account: com.google.android.gms.auth.api.signin.GoogleSignInAccount): Result<Unit> {

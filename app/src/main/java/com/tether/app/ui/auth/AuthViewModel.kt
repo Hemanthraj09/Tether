@@ -79,4 +79,12 @@ class AuthViewModel : ViewModel() {
         repository.logout()
         _authState.value = AuthState.Idle
     }
+
+    /** Called after an error toast has been shown, so it isn't shown again. */
+    fun consumeError() {
+        if (_authState.value is AuthState.Error) _authState.value = AuthState.Idle
+    }
+
+    suspend fun sendPasswordReset(email: String): Result<Unit> =
+        repository.sendPasswordReset(email)
 }

@@ -22,11 +22,17 @@ android {
 
     buildTypes {
         release {
-            isMinifyEnabled = false
+            // R8 shrinking/optimization: smaller, noticeably faster APK than debug.
+            isMinifyEnabled = true
+            isShrinkResources = true
             proguardFiles(
                 getDefaultProguardFile("proguard-android-optimize.txt"),
                 "proguard-rules.pro"
             )
+            // Signed with the debug key so the SHA-1 already registered in
+            // Firebase keeps Google Sign-In working for sideloaded builds.
+            // Switch to a real release keystore before publishing on Play.
+            signingConfig = signingConfigs.getByName("debug")
         }
     }
     compileOptions {
@@ -71,4 +77,9 @@ dependencies {
     // Lifecycle
     implementation("androidx.lifecycle:lifecycle-viewmodel-ktx:2.7.0")
     implementation("androidx.lifecycle:lifecycle-livedata-ktx:2.7.0")
+    implementation("androidx.lifecycle:lifecycle-runtime-ktx:2.7.0")
+
+    // Applies the libraries' baseline profiles at install time (also for
+    // sideloaded APKs) → faster startup and smoother scrolling.
+    implementation("androidx.profileinstaller:profileinstaller:1.3.1")
 }

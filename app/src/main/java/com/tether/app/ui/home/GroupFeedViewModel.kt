@@ -1,123 +1,114 @@
 package com.tether.app.ui.home
 
+import androidx.lifecycle.SavedStateHandle
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
-import com.tether.app.data.model.Log
+import com.google.firebase.auth.FirebaseAuth
+import com.google.firebase.firestore.FirebaseFirestore
+import com.tether.app.data.model.Group
 import com.tether.app.data.repository.GroupManagementRepository
 import com.tether.app.data.repository.LeaderboardEntry
 import com.tether.app.data.repository.LeaderboardRepository
 import com.tether.app.data.repository.LogRepository
-import kotlinx.coroutines.Job
-import kotlinx.coroutines.flow.MutableStateFlow
+import com.tether.app.data.repository.NudgeRepository
+import com.tether.app.data.snapshotFlow
+import kotlinx.coroutines.NonCancellable
+import kotlinx.coroutines.channels.Channel
+import kotlinx.coroutines.flow.Flow
+import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
+import kotlinx.coroutines.flow.map
+import kotlinx.coroutines.flow.receiveAsFlow
+import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.withContext
 
-sealed class LogUiState {
-    object Idle : LogUiState()
-    object Loading : LogUiState()
-    object Success : LogUiState()
-    data class Error(val message: String) : LogUiState()
+sealed class GroupFeedEvent {
+    data class Message(val text: String, val isError: Boolean = false) : GroupFeedEvent()
+    object LeftGroup : GroupFeedEvent()
 }
 
-sealed class GroupActionState {
-    object Idle : GroupActionState()
-    object Loading : GroupActionState()
-    object Success : GroupActionState()
-    data class Error(val message: String) : GroupActionState()
-}
+/**
+ * State for one group's screen. The groupId comes from the navigation
+ * arguments, and all data is kept alive while the screen is in the back
+ * stack, so returning to it is instant.
+ */
+class GroupFeedViewModel(savedStateHandle: SavedStateHandle) : ViewModel() {
 
-class GroupFeedViewModel : ViewModel() {
+    val groupId: String = savedStateHandle.get<String>("groupId") ?: ""
 
     private val logRepository = LogRepository()
     private val groupManagementRepository = GroupManagementRepository()
     private val leaderboardRepository = LeaderboardRepository()
+    private val nudgeRepository = NudgeRepository()
 
-    private val _feedLogs = MutableStateFlow<List<Log>>(emptyList())
-    val feedLogs: StateFlow<List<Log>> = _feedLogs
+    private val currentUid = FirebaseAuth.getInstance().currentUser?.uid ?: ""
 
-    private val _memberStats = MutableStateFlow<List<LeaderboardEntry>>(emptyList())
-    val memberStats: StateFlow<List<LeaderboardEntry>> = _memberStats
+    /** Live group document (name, members, invite code, creator). */
+    val group: StateFlow<Group?> =
+        (if (groupId.isEmpty()) kotlinx.coroutines.flow.flowOf(null)
+        else FirebaseFirestore.getInstance().collection("groups").document(groupId)
+            .snapshotFlow()
+            .map { it?.toObject(Group::class.java) })
+            .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), null)
 
-    private val _logState = MutableStateFlow<LogUiState>(LogUiState.Idle)
-    val logState: StateFlow<LogUiState> = _logState
+    /** Members ranked by today's hours; null while the first data is loading. */
+    val memberStats: StateFlow<List<LeaderboardEntry>?> =
+        (if (groupId.isEmpty()) kotlinx.coroutines.flow.flowOf(emptyList())
+        else leaderboardRepository.observeLeaderboard(groupId))
+            .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), null)
 
-    private val _groupActionState = MutableStateFlow<GroupActionState>(GroupActionState.Idle)
-    val groupActionState: StateFlow<GroupActionState> = _groupActionState
+    val isCreator: Boolean
+        get() = group.value?.createdBy == currentUid
 
-    private val _isCreator = MutableStateFlow(false)
-    val isCreator: StateFlow<Boolean> = _isCreator
+    private val _events = Channel<GroupFeedEvent>(Channel.BUFFERED)
+    val events: Flow<GroupFeedEvent> = _events.receiveAsFlow()
 
-    private var feedJob: Job? = null
-    private var statsJob: Job? = null
-
-    fun startListeningToFeed(groupId: String) {
-        feedJob?.cancel()
-        statsJob?.cancel()
-
-        feedJob = viewModelScope.launch {
-            logRepository
-                .getTodayLogsForGroup(groupId)
-                .collect { logs ->
-                    try {
-                        _feedLogs.value = logs
-                    } catch (e: Exception) {
-                        android.util.Log.e("TetherDebug", "Error in feedLogs collect: ${e.message}", e)
-                    }
-                }
-        }
-
-        statsJob = viewModelScope.launch {
-            leaderboardRepository
-                .getLeaderboardFlow(groupId)
-                .collect { stats ->
-                    try {
-                        _memberStats.value = stats
-                    } catch (e: Exception) {
-                        android.util.Log.e("TetherDebug", "Error in memberStats collect: ${e.message}", e)
-                    }
-                }
-        }
-    }
-
-    fun checkIfCreator(groupId: String) {
+    /**
+     * Logging must finish even if the user leaves the screen right away,
+     * so the write runs in a NonCancellable context.
+     */
+    fun writeLog(targetGroupId: String, hours: Double, note: String) {
         viewModelScope.launch {
-            _isCreator.value = groupManagementRepository.isGroupCreator(groupId)
-        }
-    }
-
-    fun writeLog(groupId: String, hours: Double, note: String) {
-        viewModelScope.launch {
-            _logState.value = LogUiState.Loading
-            val result = logRepository.writeLog(groupId, hours, note)
-            _logState.value = if (result.isSuccess) {
-                LogUiState.Success
-            } else {
-                LogUiState.Error(result.exceptionOrNull()?.message ?: "Failed to log")
+            val result = withContext(NonCancellable) {
+                logRepository.writeLog(targetGroupId, hours, note)
+            }
+            if (result.isFailure) {
+                _events.trySend(GroupFeedEvent.Message(
+                    result.exceptionOrNull()?.message ?: "Failed to log", isError = true))
             }
         }
     }
 
-    fun deleteGroup(groupId: String) {
+    fun sendNudge(nudgedUid: String) {
         viewModelScope.launch {
-            _groupActionState.value = GroupActionState.Loading
+            val result = nudgeRepository.sendNudge(groupId, nudgedUid)
+            if (result.isFailure) {
+                _events.trySend(GroupFeedEvent.Message(
+                    result.exceptionOrNull()?.message ?: "Couldn't send nudge", isError = true))
+            }
+        }
+    }
+
+    fun deleteGroup() {
+        viewModelScope.launch {
             val result = groupManagementRepository.deleteGroup(groupId)
-            _groupActionState.value = if (result.isSuccess)
-                GroupActionState.Success
-            else GroupActionState.Error(result.exceptionOrNull()?.message ?: "Failed to delete group")
+            _events.trySend(
+                if (result.isSuccess) GroupFeedEvent.LeftGroup
+                else GroupFeedEvent.Message(
+                    result.exceptionOrNull()?.message ?: "Failed to delete group", isError = true)
+            )
         }
     }
 
-    fun leaveGroup(groupId: String) {
+    fun leaveGroup() {
         viewModelScope.launch {
-            _groupActionState.value = GroupActionState.Loading
             val result = groupManagementRepository.leaveGroup(groupId)
-            _groupActionState.value = if (result.isSuccess)
-                GroupActionState.Success
-            else GroupActionState.Error(result.exceptionOrNull()?.message ?: "Failed to leave group")
+            _events.trySend(
+                if (result.isSuccess) GroupFeedEvent.LeftGroup
+                else GroupFeedEvent.Message(
+                    result.exceptionOrNull()?.message ?: "Failed to leave group", isError = true)
+            )
         }
-    }
-
-    fun resetGroupActionState() {
-        _groupActionState.value = GroupActionState.Idle
     }
 }

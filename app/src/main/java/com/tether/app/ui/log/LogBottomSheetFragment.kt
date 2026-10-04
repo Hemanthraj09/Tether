@@ -4,7 +4,7 @@ import android.os.Bundle
 import android.view.LayoutInflater
 import android.view.View
 import android.view.ViewGroup
-import androidx.fragment.app.activityViewModels
+import androidx.fragment.app.viewModels
 import com.google.android.material.bottomsheet.BottomSheetBehavior
 import com.google.android.material.bottomsheet.BottomSheetDialog
 import com.google.android.material.bottomsheet.BottomSheetDialogFragment
@@ -21,7 +21,8 @@ class LogBottomSheetFragment : BottomSheetDialogFragment() {
     private var currentHours = 0
     private var currentMinutes = 0
     private var groupId: String = ""
-    private val viewModel: GroupFeedViewModel by activityViewModels()
+    // Shared with the hosting GroupFeedFragment (shown in its childFragmentManager).
+    private val viewModel: GroupFeedViewModel by viewModels(ownerProducer = { requireParentFragment() })
 
     override fun onCreateView(
         inflater: LayoutInflater,
@@ -131,6 +132,8 @@ class LogBottomSheetFragment : BottomSheetDialogFragment() {
     }
 
     companion object {
+        const val TAG = "LogBottomSheet"
+
         fun newInstance(groupId: String): LogBottomSheetFragment {
             val fragment = LogBottomSheetFragment()
             fragment.arguments = Bundle().apply {

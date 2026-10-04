@@ -30,32 +30,32 @@ class OnboardingActivity : AppCompatActivity() {
 
     private fun setupViewPager() {
         val slides = listOf(
-            OnboardingSlideFragment.newInstance(
+            OnboardingSlide(
                 "Welcome to Tether",
                 "Accountability, built for your circle. Track your grind and stay ahead of your friends.",
                 R.drawable.ic_tether_logo
             ),
-            OnboardingSlideFragment.newInstance(
+            OnboardingSlide(
                 "Log Your Progress",
                 "Log study, gym, coding — anything. Add hours, minutes, and an optional note. Every entry feeds your group in real time.",
                 R.drawable.ic_add
             ),
-            OnboardingSlideFragment.newInstance(
+            OnboardingSlide(
                 "Groups & Invite Codes",
                 "Create a group and share the 6-character invite code with your friends. Max 6 members per group — tight circles only. Creators can delete, members can leave.",
                 R.drawable.ic_group
             ),
-            OnboardingSlideFragment.newInstance(
+            OnboardingSlide(
                 "Nudge Your Friends",
                 "Tap anyone's avatar on the leaderboard to send them a nudge notification. One nudge per person per day — use it wisely.",
                 R.drawable.ic_notifications
             ),
-            OnboardingSlideFragment.newInstance(
+            OnboardingSlide(
                 "Focus Timer",
-                "Stopwatch mode tracks real work time. Pomodoro mode runs 25-min focus blocks and auto-logs your session when done. Runs in the background with a persistent notification.",
+                "Stopwatch mode tracks real work time. Pomodoro mode cycles focus and break blocks and logs only your focus time. Runs in the background with a persistent notification.",
                 R.drawable.ic_flame // Using ic_flame as ic_timer replacement if not found
             ),
-            OnboardingSlideFragment.newInstance(
+            OnboardingSlide(
                 "Heatmap & Leaderboard",
                 "Your profile shows a full-year heatmap of your activity and per-group streaks. The leaderboard resets daily — show up every day to stay on top.",
                 R.drawable.ic_trophy // Using ic_trophy as ic_bar_chart replacement

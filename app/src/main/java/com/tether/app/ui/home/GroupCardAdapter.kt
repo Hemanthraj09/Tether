@@ -2,16 +2,22 @@ package com.tether.app.ui.home
 
 import android.view.LayoutInflater
 import android.view.ViewGroup
+import androidx.recyclerview.widget.DiffUtil
+import androidx.recyclerview.widget.ListAdapter
 import androidx.recyclerview.widget.RecyclerView
 import com.tether.app.R
 import com.tether.app.data.model.Group
 import com.tether.app.databinding.ItemGroupCardBinding
 
 class GroupCardAdapter(
-    private val groups: List<Group>,
     private val onGroupClick: (Group) -> Unit,
     private val onGroupLongPress: (Group) -> Unit
-) : RecyclerView.Adapter<GroupCardAdapter.GroupCardViewHolder>() {
+) : ListAdapter<Group, GroupCardAdapter.GroupCardViewHolder>(Diff) {
+
+    private object Diff : DiffUtil.ItemCallback<Group>() {
+        override fun areItemsTheSame(oldItem: Group, newItem: Group) = oldItem.id == newItem.id
+        override fun areContentsTheSame(oldItem: Group, newItem: Group) = oldItem == newItem
+    }
 
     inner class GroupCardViewHolder(
         val binding: ItemGroupCardBinding
@@ -31,7 +37,7 @@ class GroupCardAdapter(
         holder: GroupCardViewHolder,
         position: Int
     ) {
-        val group = groups[position]
+        val group = getItem(position)
         val binding = holder.binding
 
         binding.tvGroupName.text = group.name
@@ -59,6 +65,4 @@ class GroupCardAdapter(
             true
         }
     }
-
-    override fun getItemCount() = groups.size
 }

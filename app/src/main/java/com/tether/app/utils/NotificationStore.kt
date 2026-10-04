@@ -1,6 +1,9 @@
 package com.tether.app.utils
 
 import android.content.Context
+import kotlinx.coroutines.flow.MutableStateFlow
+import kotlinx.coroutines.flow.StateFlow
+import kotlinx.coroutines.flow.asStateFlow
 import org.json.JSONArray
 import org.json.JSONObject
 import java.text.SimpleDateFormat
@@ -20,11 +23,22 @@ object NotificationStore {
     private const val KEY_ITEMS = "notif_items"
     private const val KEY_UNREAD = "notif_unread"
 
-    private fun todayKey(): String =
-        SimpleDateFormat("yyyy-MM-dd", Locale.getDefault()).format(Date())
+    private val _unread = MutableStateFlow(false)
+    private var unreadLoaded = false
+
+    private fun todayKey(): String = DateKeys.today()
 
     private fun timeLabel(): String =
         SimpleDateFormat("hh:mm a", Locale.getDefault()).format(Date())
+
+    /** Observable unread state for the bell dot. */
+    fun unreadFlow(context: Context): StateFlow<Boolean> {
+        if (!unreadLoaded) {
+            unreadLoaded = true
+            _unread.value = hasUnread(context)
+        }
+        return _unread.asStateFlow()
+    }
 
     fun addNotification(context: Context, message: String) {
         val prefs = context.getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE)
@@ -54,6 +68,7 @@ object NotificationStore {
             .putString(KEY_ITEMS, newArray.toString())
             .putBoolean(KEY_UNREAD, true)
             .apply()
+        _unread.value = true
     }
 
     fun getNotifications(context: Context): List<TetherNotification> {
@@ -83,5 +98,6 @@ object NotificationStore {
     fun markRead(context: Context) {
         val prefs = context.getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE)
         prefs.edit().putBoolean(KEY_UNREAD, false).apply()
+        _unread.value = false
     }
 }

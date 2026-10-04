@@ -2,51 +2,72 @@ package com.tether.app.ui.leaderboard
 
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
+import com.tether.app.data.model.Group
+import com.tether.app.data.repository.GroupRepository
 import com.tether.app.data.repository.LeaderboardEntry
 import com.tether.app.data.repository.LeaderboardRepository
-import kotlinx.coroutines.Job
+import com.tether.app.data.repository.NudgeRepository
+import kotlinx.coroutines.ExperimentalCoroutinesApi
+import kotlinx.coroutines.channels.Channel
+import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.MutableStateFlow
+import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
+import kotlinx.coroutines.flow.asStateFlow
+import kotlinx.coroutines.flow.combine
+import kotlinx.coroutines.flow.distinctUntilChanged
+import kotlinx.coroutines.flow.flatMapLatest
+import kotlinx.coroutines.flow.flowOf
+import kotlinx.coroutines.flow.map
+import kotlinx.coroutines.flow.receiveAsFlow
+import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.launch
-
-sealed class LeaderboardUiState {
-    object Loading : LeaderboardUiState()
-    data class Success(
-        val entries: List<LeaderboardEntry>
-    ) : LeaderboardUiState()
-    data class Error(
-        val message: String
-    ) : LeaderboardUiState()
-    object Empty : LeaderboardUiState()
-}
 
 class LeaderboardViewModel : ViewModel() {
 
-    private val repository = LeaderboardRepository()
+    private val leaderboardRepository = LeaderboardRepository()
+    private val nudgeRepository = NudgeRepository()
 
-    private val _uiState =
-        MutableStateFlow<LeaderboardUiState>(
-            LeaderboardUiState.Loading)
-    val uiState: StateFlow<LeaderboardUiState> =
-        _uiState
+    val groups: StateFlow<List<Group>?> = GroupRepository().observeUserGroups()
+        .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), null)
 
-    private var leaderboardJob: Job? = null
+    private val selectedGroupId = MutableStateFlow<String?>(null)
 
-    fun loadLeaderboard(groupId: String) {
-        leaderboardJob?.cancel()
-        leaderboardJob = viewModelScope.launch {
-            _uiState.value = LeaderboardUiState.Loading
-            repository.getLeaderboardFlow(groupId).collect { entries ->
-                try {
-                    _uiState.value = if (entries.isEmpty()) {
-                        LeaderboardUiState.Empty
-                    } else {
-                        LeaderboardUiState.Success(entries)
-                    }
-                } catch (e: Exception) {
-                    android.util.Log.e("TetherDebug", "Error in leaderboard collect: ${e.message}", e)
-                    _uiState.value = LeaderboardUiState.Error(e.message ?: "Unknown error")
-                }
+    /** The chosen group, falling back to the first one (as before). */
+    val currentGroup: StateFlow<Group?> = combine(groups, selectedGroupId) { list, selected ->
+        list?.firstOrNull { it.id == selected } ?: list?.firstOrNull()
+    }.stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), null)
+
+    private val _weeklyMode = MutableStateFlow(false) // Today is the default view
+    val weeklyMode: StateFlow<Boolean> = _weeklyMode.asStateFlow()
+
+    @OptIn(ExperimentalCoroutinesApi::class)
+    val entries: StateFlow<List<LeaderboardEntry>?> = currentGroup
+        .map { it?.id }
+        .distinctUntilChanged()
+        .flatMapLatest { groupId ->
+            if (groupId == null) flowOf(emptyList())
+            else leaderboardRepository.observeLeaderboard(groupId)
+        }
+        .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), null)
+
+    private val _messages = Channel<String>(Channel.BUFFERED)
+    val messages: Flow<String> = _messages.receiveAsFlow()
+
+    fun selectGroup(groupId: String) {
+        selectedGroupId.value = groupId
+    }
+
+    fun setWeeklyMode(weekly: Boolean) {
+        _weeklyMode.value = weekly
+    }
+
+    fun sendNudge(nudgedUid: String) {
+        val groupId = currentGroup.value?.id ?: return
+        viewModelScope.launch {
+            val result = nudgeRepository.sendNudge(groupId, nudgedUid)
+            if (result.isFailure) {
+                _messages.trySend(result.exceptionOrNull()?.message ?: "Couldn't send nudge")
             }
         }
     }

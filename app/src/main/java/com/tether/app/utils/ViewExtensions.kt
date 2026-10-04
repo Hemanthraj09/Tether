@@ -1,35 +1,25 @@
 package com.tether.app.utils
 
-import android.view.View
-import androidx.core.view.ViewCompat
-import androidx.core.view.WindowInsetsCompat
+import android.os.Bundle
+import androidx.annotation.IdRes
+import androidx.fragment.app.DialogFragment
+import androidx.fragment.app.FragmentManager
+import androidx.navigation.NavController
 
-fun View.applyStatusBarPadding() {
-    ViewCompat.setOnApplyWindowInsetsListener(this) {
-        v, insets ->
-        val statusBarHeight = insets.getInsets(
-            WindowInsetsCompat.Type.statusBars()).top
-        v.setPadding(
-            v.paddingLeft,
-            statusBarHeight,
-            v.paddingRight,
-            v.paddingBottom
-        )
-        insets
+/**
+ * Navigates with an action only if the current destination owns it.
+ * Prevents the "navigation destination is unknown" crash when a button is
+ * double-tapped and the first tap already navigated away.
+ */
+fun NavController.navigateSafe(@IdRes actionId: Int, args: Bundle? = null) {
+    if (currentDestination?.getAction(actionId) != null) {
+        navigate(actionId, args)
     }
 }
 
-fun View.applyNavigationBarPadding() {
-    ViewCompat.setOnApplyWindowInsetsListener(this) {
-        v, insets ->
-        val navBarHeight = insets.getInsets(
-            WindowInsetsCompat.Type.navigationBars()).bottom
-        v.setPadding(
-            v.paddingLeft,
-            v.paddingTop,
-            v.paddingRight,
-            navBarHeight
-        )
-        insets
+/** Shows a dialog only if one with the same tag isn't already showing (double-tap guard). */
+fun DialogFragment.showOnce(fragmentManager: FragmentManager, tag: String) {
+    if (fragmentManager.findFragmentByTag(tag) == null && !fragmentManager.isStateSaved) {
+        show(fragmentManager, tag)
     }
 }

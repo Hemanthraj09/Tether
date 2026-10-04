@@ -6,30 +6,28 @@ import android.view.LayoutInflater
 import android.view.View
 import android.view.ViewGroup
 import androidx.core.content.ContextCompat
+import androidx.recyclerview.widget.DiffUtil
+import androidx.recyclerview.widget.ListAdapter
 import androidx.recyclerview.widget.RecyclerView
 import com.tether.app.R
 import com.tether.app.databinding.ItemLeaderboardRowBinding
+import com.tether.app.utils.Formatters
+import com.tether.app.utils.TetherToast
 
+/**
+ * Ranked member list (group feed + leaderboard tab).
+ * DiffUtil only rebinds rows that changed and animates rank changes.
+ * The rank is item.id (1-based), so moved rows always show the right number.
+ */
 class LeaderboardAdapter(
-    private val groupId: String,
-    private var items: List<LeaderboardItem>,
-    private val onNudge: (String, String) -> Unit
-) :
-    RecyclerView.Adapter<LeaderboardAdapter.LeaderboardViewHolder>() {
+    private val onNudge: ((LeaderboardItem) -> Unit)?
+) : ListAdapter<LeaderboardItem, LeaderboardAdapter.LeaderboardViewHolder>(Diff) {
 
-    fun updateItems(newItems: List<LeaderboardItem>) {
-        items = newItems
-        notifyDataSetChanged()
-    }
-
-    fun markNudged(nudgedUid: String) {
-        val index = items.indexOfFirst { it.uid == nudgedUid }
-        if (index != -1) {
-            items = items.toMutableList().also {
-                it[index] = it[index].copy(hasNudgedToday = true)
-            }
-            notifyItemChanged(index)
-        }
+    private object Diff : DiffUtil.ItemCallback<LeaderboardItem>() {
+        override fun areItemsTheSame(oldItem: LeaderboardItem, newItem: LeaderboardItem) =
+            oldItem.uid == newItem.uid
+        override fun areContentsTheSame(oldItem: LeaderboardItem, newItem: LeaderboardItem) =
+            oldItem == newItem
     }
 
     class LeaderboardViewHolder(val binding: ItemLeaderboardRowBinding) :
@@ -43,13 +41,14 @@ class LeaderboardAdapter(
     }
 
     override fun onBindViewHolder(holder: LeaderboardViewHolder, position: Int) {
-        val item = items[position]
+        val item = getItem(position)
         val context = holder.binding.root.context
+        val rankIndex = item.id - 1
 
         with(holder.binding) {
-            tvRank.text = "#${position + 1}"
-            
-            val rankColor = when (position) {
+            tvRank.text = "#${item.id}"
+
+            val rankColor = when (rankIndex) {
                 0 -> Color.parseColor("#FFD700") // Gold
                 1 -> Color.parseColor("#C0C0C0") // Silver
                 2 -> Color.parseColor("#CD7F32") // Bronze
@@ -60,7 +59,7 @@ class LeaderboardAdapter(
             tvAvatarInitials.text = item.initials
             flAvatar.backgroundTintList = ColorStateList.valueOf(Color.parseColor(item.avatarColorHex))
 
-            if (position < 3) {
+            if (rankIndex < 3) {
                 ivTrophyBadge.visibility = View.VISIBLE
                 ivTrophyBadge.imageTintList = ColorStateList.valueOf(rankColor)
             } else {
@@ -74,26 +73,21 @@ class LeaderboardAdapter(
             )
 
             tvStreak.text = "${item.streak} ${context.getString(R.string.day_streak)}"
-            tvHours.text = formatHours(item.hours)
+            tvHours.text = Formatters.formatHours(item.hours)
 
-            if (!item.isCurrentUser && groupId.isNotEmpty()) {
+            if (!item.isCurrentUser && onNudge != null) {
                 flAvatar.setOnClickListener {
                     if (!item.hasNudgedToday) {
-                        onNudge(groupId, item.uid)
+                        onNudge.invoke(item)
                     } else {
-                        android.widget.Toast.makeText(
-                            context, "Already nudged today ✓", android.widget.Toast.LENGTH_SHORT
-                        ).show()
+                        TetherToast.show(context, "Already nudged today ✓")
                     }
                 }
-                // Subtle ring to indicate tappable for other users
-                if (item.hasNudgedToday) {
-                    flAvatar.alpha = 0.5f
-                } else {
-                    flAvatar.alpha = 1.0f
-                }
+                // Dimmed avatar = already nudged today
+                flAvatar.alpha = if (item.hasNudgedToday) 0.5f else 1.0f
             } else {
                 flAvatar.setOnClickListener(null)
+                flAvatar.isClickable = false
                 flAvatar.alpha = 1.0f
             }
 
@@ -104,24 +98,11 @@ class LeaderboardAdapter(
                 tvPaceLabel.visibility = View.GONE
             }
 
-            if (item.isCurrentUser) {
-                root.background = ContextCompat.getDrawable(context, R.drawable.bg_leaderboard_row_active)
-            } else {
-                root.background = ContextCompat.getDrawable(context, R.drawable.bg_leaderboard_row)
-            }
+            root.background = ContextCompat.getDrawable(
+                context,
+                if (item.isCurrentUser) R.drawable.bg_leaderboard_row_active
+                else R.drawable.bg_leaderboard_row
+            )
         }
     }
-
-    private fun formatHours(hours: Double): String {
-        val totalMinutes = (hours * 60).toInt()
-        val h = totalMinutes / 60
-        val m = totalMinutes % 60
-        return when {
-            h == 0 -> "${m}m"
-            m == 0 -> "${h}h"
-            else -> "${h}h ${m}m"
-        }
-    }
-
-    override fun getItemCount() = items.size
 }

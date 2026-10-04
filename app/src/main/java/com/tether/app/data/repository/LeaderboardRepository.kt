@@ -1,223 +1,160 @@
 package com.tether.app.data.repository
 
 import com.google.firebase.auth.FirebaseAuth
+import com.google.firebase.firestore.DocumentSnapshot
+import com.google.firebase.firestore.FieldPath
 import com.google.firebase.firestore.FirebaseFirestore
+import com.tether.app.data.hoursByUid
 import com.tether.app.data.model.Group
-import kotlinx.coroutines.*
-import kotlinx.coroutines.channels.awaitClose
+import com.tether.app.data.snapshotFlow
+import com.tether.app.utils.DateKeys
+import com.tether.app.utils.Formatters
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.flow.Flow
-import kotlinx.coroutines.flow.callbackFlow
-import kotlinx.coroutines.tasks.await
-import java.util.Calendar
+import kotlinx.coroutines.flow.combine
+import kotlinx.coroutines.flow.distinctUntilChanged
+import kotlinx.coroutines.flow.flatMapLatest
+import kotlinx.coroutines.flow.flowOf
+import kotlinx.coroutines.flow.flowOn
+import kotlinx.coroutines.flow.map
 
+/**
+ * Real-time leaderboard built from a handful of snapshot listeners that are
+ * combined in memory. Previously every change re-fetched the group, stats,
+ * and 3 documents per member from the server, one after another.
+ */
 class LeaderboardRepository {
 
     private val auth = FirebaseAuth.getInstance()
     private val firestore = FirebaseFirestore.getInstance()
-    private val repositoryScope = CoroutineScope(Dispatchers.IO + SupervisorJob())
 
     private val currentUid: String
         get() = auth.currentUser?.uid ?: ""
 
-    suspend fun getLeaderboard(
-        groupId: String
-    ): Result<List<LeaderboardEntry>> {
-        return try {
-            val entries = fetchLeaderboardData(groupId)
-            Result.success(entries)
-        } catch (e: Exception) {
-            Result.failure(e)
+    /** Re-subscribes automatically at midnight so "today" resets on its own. */
+    @OptIn(ExperimentalCoroutinesApi::class)
+    fun observeLeaderboard(groupId: String): Flow<List<LeaderboardEntry>> =
+        DateKeys.todayFlow()
+            .flatMapLatest { today -> observeForDate(groupId, today) }
+            .distinctUntilChanged()
+            .flowOn(Dispatchers.Default)
+
+    @OptIn(ExperimentalCoroutinesApi::class)
+    private fun observeForDate(
+        groupId: String,
+        today: String
+    ): Flow<List<LeaderboardEntry>> {
+        val me = currentUid
+        val yesterday = DateKeys.previousDay(today)
+        val statsRef = firestore.collection("groupStats").document(groupId)
+
+        val groupFlow = firestore.collection("groups").document(groupId)
+            .snapshotFlow()
+            .map { it?.toObject(Group::class.java) }
+
+        val namesFlow = groupFlow
+            .map { it?.members ?: emptyList() }
+            .distinctUntilChanged()
+            .flatMapLatest { members -> observeNames(members) }
+
+        val todayFlow = statsRef.collection("daily").document(today)
+            .snapshotFlow().map { it.hoursByUid() }
+        val yesterdayFlow = statsRef.collection("daily").document(yesterday)
+            .snapshotFlow().map { it.hoursByUid() }
+        val weeklyFlow = statsRef.collection("weekly").document(DateKeys.weekKey())
+            .snapshotFlow().map { it.hoursByUid() }
+
+        val streaksFlow = statsRef.collection("streaks")
+            .snapshotFlow()
+            .map { snapshot ->
+                snapshot?.documents?.associate { doc -> doc.id to doc.toStreak() } ?: emptyMap()
+            }
+
+        val nudgedFlow = statsRef.collection("nudges")
+            .whereEqualTo("date", today)
+            .snapshotFlow()
+            .map { snapshot ->
+                snapshot?.documents
+                    ?.filter { it.getString("nudgerUid") == me }
+                    ?.mapNotNull { it.getString("nudgedUid") }
+                    ?.toSet()
+                    ?: emptySet()
+            }
+
+        val statsFlow = combine(todayFlow, yesterdayFlow, weeklyFlow, streaksFlow, nudgedFlow) {
+                todayHours, yesterdayHours, weeklyHours, streaks, nudged ->
+            Stats(todayHours, yesterdayHours, weeklyHours, streaks, nudged)
+        }
+
+        return combine(groupFlow, namesFlow, statsFlow) { group, names, stats ->
+            if (group == null) return@combine emptyList()
+
+            group.members.map { uid ->
+                val name = names[uid] ?: "Unknown"
+                val todayHours = stats.today[uid] ?: 0.0
+                val yesterdayHours = stats.yesterday[uid] ?: 0.0
+
+                // A streak only counts if the last log was today or yesterday.
+                val streakInfo = stats.streaks[uid]
+                val streak = if (streakInfo != null &&
+                    (streakInfo.lastLogDate == today || streakInfo.lastLogDate == yesterday)
+                ) streakInfo.current else 0
+
+                // Pace: only shown when behind yesterday.
+                val paceLabel = if (yesterdayHours > 0.5 && todayHours < yesterdayHours) {
+                    val totalMins = ((yesterdayHours - todayHours) * 60).toInt()
+                    val hrs = totalMins / 60
+                    val mins = totalMins % 60
+                    if (hrs > 0) "${hrs}h ${mins}m behind yesterday"
+                    else "${mins}m behind yesterday"
+                } else ""
+
+                LeaderboardEntry(
+                    uid = uid,
+                    name = name,
+                    initials = Formatters.initials(name),
+                    hours = stats.weekly[uid] ?: 0.0,
+                    todayHours = todayHours,
+                    streak = streak,
+                    avatarColorHex = Formatters.avatarColor(uid),
+                    isCurrentUser = uid == me,
+                    paceLabel = paceLabel,
+                    hasNudgedToday = uid in stats.nudged
+                )
+            }.sortedByDescending { it.todayHours }
         }
     }
 
-    fun getLeaderboardFlow(
-        groupId: String
-    ): Flow<List<LeaderboardEntry>> = callbackFlow {
-        val weekKey = getCurrentWeekKey()
-        val today = java.text.SimpleDateFormat("yyyy-MM-dd",
-            java.util.Locale.getDefault()).format(java.util.Date())
-        
-        val groupListener = firestore
-            .collection("groups")
-            .document(groupId)
-            .addSnapshotListener { _, _ ->
-                repositoryScope.launch {
-                    trySend(fetchLeaderboardData(groupId))
+    private fun observeNames(members: List<String>): Flow<Map<String, String>> {
+        if (members.isEmpty()) return flowOf(emptyMap())
+        val chunkFlows = members.chunked(10).map { chunk ->
+            firestore.collection("users")
+                .whereIn(FieldPath.documentId(), chunk)
+                .snapshotFlow()
+                .map { snapshot ->
+                    snapshot?.documents?.associate { doc ->
+                        doc.id to (doc.getString("name")?.takeIf { it.isNotBlank() } ?: "Unknown")
+                    } ?: emptyMap()
                 }
-            }
-
-        val statsListener = firestore
-            .collection("groupStats")
-            .document(groupId)
-            .collection("weekly")
-            .document(weekKey)
-            .addSnapshotListener { _, _ ->
-                repositoryScope.launch {
-                    trySend(fetchLeaderboardData(groupId))
-                }
-            }
-
-        val dailyListener = firestore
-            .collection("groupStats")
-            .document(groupId)
-            .collection("daily")
-            .document(today)
-            .addSnapshotListener { _, _ ->
-                repositoryScope.launch {
-                    trySend(fetchLeaderboardData(groupId))
-                }
-            }
-
-        awaitClose {
-            groupListener.remove()
-            statsListener.remove()
-            dailyListener.remove()
         }
+        return combine(chunkFlows) { maps -> maps.fold(emptyMap()) { acc, m -> acc + m } }
     }
 
-    private suspend fun fetchLeaderboardData(
-        groupId: String
-    ): List<LeaderboardEntry> {
-        val groupDoc = firestore
-            .collection("groups")
-            .document(groupId)
-            .get()
-            .await()
+    private fun DocumentSnapshot.toStreak() = StreakInfo(
+        current = getLong("currentStreak")?.toInt() ?: 0,
+        lastLogDate = getString("lastLogDate") ?: ""
+    )
 
-        val group = groupDoc
-            .toObject(Group::class.java)
-            ?: return emptyList()
+    private data class StreakInfo(val current: Int, val lastLogDate: String)
 
-        val weekKey = getCurrentWeekKey()
-
-        val hoursDocSnapshot = try {
-            firestore
-                .collection("groupStats")
-                .document(groupId)
-                .collection("weekly")
-                .document(weekKey)
-                .get()
-                .await()
-        } catch (e: Exception) {
-            null
-        }
-
-        val today = java.text.SimpleDateFormat("yyyy-MM-dd",
-            java.util.Locale.getDefault()).format(java.util.Date())
-
-        val yesterday = java.text.SimpleDateFormat("yyyy-MM-dd",
-            java.util.Locale.getDefault()).let { sdf ->
-            val cal = java.util.Calendar.getInstance()
-            cal.add(java.util.Calendar.DAY_OF_MONTH, -1)
-            sdf.format(cal.time)
-        }
-
-        val todayStatsSnapshot = try {
-            firestore.collection("groupStats")
-                .document(groupId)
-                .collection("daily")
-                .document(today)
-                .get().await()
-        } catch (e: Exception) { null }
-
-        val yesterdayStatsSnapshot = try {
-            firestore.collection("groupStats")
-                .document(groupId)
-                .collection("daily")
-                .document(yesterday)
-                .get().await()
-        } catch (e: Exception) { null }
-
-        return group.members.map { uid ->
-            val userDoc = firestore
-                .collection("users")
-                .document(uid)
-                .get()
-                .await()
-
-            val name = userDoc
-                .getString("name") ?: "Unknown"
-            
-            val streakDoc = try {
-                firestore.collection("groupStats")
-                    .document(groupId)
-                    .collection("streaks")
-                    .document(uid)
-                    .get().await()
-            } catch (e: Exception) { null }
-            val storedStreak = streakDoc?.getLong("currentStreak")?.toInt() ?: 0
-            val lastLogDate = streakDoc?.getString("lastLogDate") ?: ""
-            val sdfForStreak = java.text.SimpleDateFormat("yyyy-MM-dd", java.util.Locale.getDefault())
-            val yesterdayForStreak = sdfForStreak.let {
-                val cal = java.util.Calendar.getInstance()
-                cal.add(java.util.Calendar.DAY_OF_MONTH, -1)
-                it.format(cal.time)
-            }
-            val streak = if (lastLogDate == today || lastLogDate == yesterdayForStreak) storedStreak else 0
-
-            val hours = hoursDocSnapshot?.getDouble(uid) ?: 0.0
-
-            val todayHours = todayStatsSnapshot?.getDouble(uid) ?: 0.0
-            val yesterdayHours = yesterdayStatsSnapshot?.getDouble(uid) ?: 0.0
-
-            // Pace logic: only show if behind yesterday
-            val paceLabel = if (yesterdayHours > 0.5 && todayHours < yesterdayHours) {
-                val diff = yesterdayHours - todayHours
-                val totalMins = (diff * 60).toInt()
-                val hrs = totalMins / 60
-                val mins = totalMins % 60
-                if (hrs > 0) "${hrs}h ${mins}m behind yesterday"
-                else "${mins}m behind yesterday"
-            } else ""
-
-            val initials = name
-                .split(" ")
-                .mapNotNull {
-                    it.firstOrNull()?.toString()
-                }
-                .take(2)
-                .joinToString("")
-                .uppercase()
-
-            val avatarColors = listOf(
-                "#3B82F6", "#22C55E", "#A855F7",
-                "#EC4899", "#EAB308", "#EF4444",
-                "#F97316", "#06B6D4"
-            )
-            val avatarColor = avatarColors[
-                uid.hashCode().and(0x7fffffff)
-                    .rem(avatarColors.size)]
-
-            val hasNudgedToday = try {
-                val nudgeKey = "${currentUid}_$uid"
-                firestore.collection("nudges")
-                    .document(groupId)
-                    .collection(today)
-                    .document(nudgeKey)
-                    .get().await().exists()
-            } catch (e: Exception) { false }
-
-            LeaderboardEntry(
-                uid = uid,
-                name = name,
-                initials = initials,
-                hours = hours,
-                todayHours = todayHours,
-                streak = streak,
-                avatarColorHex = avatarColor,
-                isCurrentUser = uid == currentUid,
-                paceLabel = paceLabel,
-                hasNudgedToday = hasNudgedToday
-            )
-        }.sortedByDescending { it.todayHours }
-    }
-
-    private fun getCurrentWeekKey(): String {
-        val cal = Calendar.getInstance()
-        val week = cal.get(Calendar.WEEK_OF_YEAR)
-        val year = cal.get(Calendar.YEAR)
-        return "$year-W$week"
-    }
+    private data class Stats(
+        val today: Map<String, Double>,
+        val yesterday: Map<String, Double>,
+        val weekly: Map<String, Double>,
+        val streaks: Map<String, StreakInfo>,
+        val nudged: Set<String>
+    )
 }
 
 data class LeaderboardEntry(

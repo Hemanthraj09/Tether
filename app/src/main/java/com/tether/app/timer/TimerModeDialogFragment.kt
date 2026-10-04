@@ -5,6 +5,7 @@ import android.os.Bundle
 import android.view.*
 import androidx.fragment.app.DialogFragment
 import com.tether.app.databinding.DialogTimerModeBinding
+import com.tether.app.utils.showOnce
 
 class TimerModeDialogFragment : DialogFragment() {
 
@@ -23,7 +24,6 @@ class TimerModeDialogFragment : DialogFragment() {
 
         binding.btnNormal.setOnClickListener {
             startTimer(TetherTimerService.TimerMode.STOPWATCH)
-            dismiss()
         }
 
         binding.btnPomodoro.setOnClickListener {
@@ -33,12 +33,10 @@ class TimerModeDialogFragment : DialogFragment() {
 
         binding.btnPomo25.setOnClickListener {
             startTimer(TetherTimerService.TimerMode.POMODORO, 25, 5)
-            dismiss()
         }
 
         binding.btnPomo50.setOnClickListener {
             startTimer(TetherTimerService.TimerMode.POMODORO, 50, 10)
-            dismiss()
         }
     }
 
@@ -64,11 +62,10 @@ class TimerModeDialogFragment : DialogFragment() {
         }
         requireContext().startForegroundService(intent)
 
-        val updateIntent = Intent("com.tether.app.TIMER_STARTED")
-        requireContext().sendBroadcast(updateIntent)
-
-        // Show control fragment
-        TimerControlFragment.newInstance().show(parentFragmentManager, "TimerControl")
+        // Show the control sheet in the same fragment manager (the group feed's),
+        // so its "stopped" result reaches the group feed.
+        TimerControlFragment.newInstance().showOnce(parentFragmentManager, TimerControlFragment.TAG)
+        dismiss()
     }
 
     override fun onDestroyView() {
@@ -77,6 +74,8 @@ class TimerModeDialogFragment : DialogFragment() {
     }
 
     companion object {
+        const val TAG = "TimerModeDialog"
+
         fun newInstance(groupId: String): TimerModeDialogFragment {
             return TimerModeDialogFragment().apply {
                 arguments = Bundle().apply { putString("groupId", groupId) }

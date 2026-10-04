@@ -7,23 +7,27 @@ import android.view.ViewGroup
 import androidx.core.os.bundleOf
 import androidx.fragment.app.Fragment
 import androidx.fragment.app.viewModels
+import androidx.lifecycle.Lifecycle
 import androidx.lifecycle.lifecycleScope
+import androidx.lifecycle.repeatOnLifecycle
 import androidx.navigation.fragment.findNavController
 import androidx.recyclerview.widget.LinearLayoutManager
+import com.google.firebase.auth.FirebaseAuth
 import com.tether.app.R
 import com.tether.app.data.model.Group
 import com.tether.app.databinding.FragmentGroupListBinding
-import com.tether.app.ui.group.GroupViewModel
-import com.tether.app.ui.group.UserGroupsState
 import com.tether.app.utils.NotificationStore
 import com.tether.app.utils.TetherToast
+import com.tether.app.utils.navigateSafe
 import kotlinx.coroutines.launch
 
 class GroupListFragment : Fragment() {
 
     private var _binding: FragmentGroupListBinding? = null
     private val binding get() = _binding!!
-    private val groupViewModel: GroupViewModel by viewModels()
+    private val viewModel: GroupListViewModel by viewModels()
+
+    private lateinit var adapter: GroupCardAdapter
 
     override fun onCreateView(
         inflater: LayoutInflater,
@@ -40,65 +44,61 @@ class GroupListFragment : Fragment() {
     ) {
         super.onViewCreated(view, savedInstanceState)
 
-        observeGroups()
-        groupViewModel.loadUserGroups()
-        setupNotificationBell()
-        startGroupActivityListeners()
+        adapter = GroupCardAdapter(
+            onGroupClick = { group -> navigateToGroupFeed(group) },
+            onGroupLongPress = { group -> showGroupOptionsFromList(group) }
+        )
+        binding.groupListRecyclerView.layoutManager = LinearLayoutManager(requireContext())
+        binding.groupListRecyclerView.adapter = adapter
 
         binding.btnJoinCreateFromList.setOnClickListener {
-            findNavController().navigate(R.id.action_groupList_to_group)
+            findNavController().navigateSafe(R.id.action_groupList_to_group)
         }
 
         binding.btnJoinCreateGroup.setOnClickListener {
-            findNavController().navigate(R.id.action_groupList_to_group)
+            findNavController().navigateSafe(R.id.action_groupList_to_group)
         }
-    }
 
-    private fun observeGroups() {
+        binding.btnGroupsNotification.setOnClickListener {
+            NotificationStore.markRead(requireContext())
+            showNotificationsBottomSheet()
+        }
+
         viewLifecycleOwner.lifecycleScope.launch {
-            groupViewModel.userGroupsState.collect { state ->
-                when (state) {
-                    is UserGroupsState.Loading -> {
-                        binding.groupListRecyclerView.visibility = View.GONE
-                        binding.layoutNoGroups.visibility = View.GONE
+            viewLifecycleOwner.repeatOnLifecycle(Lifecycle.State.STARTED) {
+                launch { viewModel.groups.collect { groups -> renderGroups(groups) } }
+                launch {
+                    NotificationStore.unreadFlow(requireContext()).collect { hasUnread ->
+                        binding.notifDot.visibility = if (hasUnread) View.VISIBLE else View.GONE
                     }
-                    is UserGroupsState.Success -> {
-                        val groups = state.groups
-                        if (groups.isEmpty()) {
-                            binding.groupListRecyclerView.visibility = View.GONE
-                            binding.layoutNoGroups.visibility = View.VISIBLE
-                            binding.tvGroupCount.text = "0 groups"
-                        } else {
-                            binding.groupListRecyclerView.visibility = View.VISIBLE
-                            binding.layoutNoGroups.visibility = View.GONE
-                            binding.tvGroupCount.text = "${groups.size} group" +
-                                    if (groups.size != 1) "s" else ""
-                            setupRecyclerView(groups)
-                        }
-                    }
-                    is UserGroupsState.Error -> {
-                        binding.groupListRecyclerView.visibility = View.GONE
-                        binding.layoutNoGroups.visibility = View.VISIBLE
-                        binding.tvGroupCount.text = "0 groups"
+                }
+                launch {
+                    viewModel.messages.collect { (text, isError) ->
+                        TetherToast.show(requireContext(), text, isError)
                     }
                 }
             }
         }
     }
 
-    private fun setupRecyclerView(groups: List<Group>) {
-        binding.groupListRecyclerView.layoutManager =
-            LinearLayoutManager(requireContext())
-        binding.groupListRecyclerView.adapter =
-            GroupCardAdapter(
-                groups,
-                onGroupClick = { group ->
-                    navigateToGroupFeed(group)
-                },
-                onGroupLongPress = { group ->
-                    showGroupOptionsFromList(group)
-                }
-            )
+    private fun renderGroups(groups: List<Group>?) {
+        if (groups == null) {
+            // First load (usually only a few ms, served from cache).
+            binding.groupListRecyclerView.visibility = View.GONE
+            binding.layoutNoGroups.visibility = View.GONE
+            return
+        }
+        if (groups.isEmpty()) {
+            binding.groupListRecyclerView.visibility = View.GONE
+            binding.layoutNoGroups.visibility = View.VISIBLE
+            binding.tvGroupCount.text = "0 groups"
+        } else {
+            binding.groupListRecyclerView.visibility = View.VISIBLE
+            binding.layoutNoGroups.visibility = View.GONE
+            binding.tvGroupCount.text = "${groups.size} group" +
+                    if (groups.size != 1) "s" else ""
+        }
+        adapter.submitList(groups)
     }
 
     private fun navigateToGroupFeed(group: Group) {
@@ -107,14 +107,11 @@ class GroupListFragment : Fragment() {
             "groupName" to group.name,
             "groupGoal" to group.goalType
         )
-        findNavController().navigate(
-            R.id.action_groupList_to_feed,
-            bundle
-        )
+        findNavController().navigateSafe(R.id.action_groupList_to_feed, bundle)
     }
 
     private fun showGroupOptionsFromList(group: Group) {
-        val currentUid = com.google.firebase.auth.FirebaseAuth.getInstance().currentUser?.uid ?: return
+        val currentUid = FirebaseAuth.getInstance().currentUser?.uid ?: return
         val isCreator = group.createdBy == currentUid
 
         if (isCreator) {
@@ -138,22 +135,7 @@ class GroupListFragment : Fragment() {
         android.app.AlertDialog.Builder(requireContext())
             .setTitle("Delete Group")
             .setMessage("Are you sure you want to delete \"${group.name}\"? This cannot be undone.")
-            .setPositiveButton("Delete") { _, _ ->
-                viewLifecycleOwner.lifecycleScope.launch {
-                    val repo = com.tether.app.data.repository.GroupManagementRepository()
-                    val result = repo.deleteGroup(group.id)
-                    if (result.isSuccess) {
-                        TetherToast.show(requireContext(), "${group.name} deleted.")
-                        groupViewModel.loadUserGroups()
-                    } else {
-                        TetherToast.show(
-                            requireContext(),
-                            "Failed to delete group",
-                            isError = true
-                        )
-                    }
-                }
-            }
+            .setPositiveButton("Delete") { _, _ -> viewModel.deleteGroup(group) }
             .setNegativeButton("Cancel", null)
             .show()
     }
@@ -162,40 +144,9 @@ class GroupListFragment : Fragment() {
         android.app.AlertDialog.Builder(requireContext())
             .setTitle("Leave Group")
             .setMessage("Are you sure you want to leave \"${group.name}\"?")
-            .setPositiveButton("Leave") { _, _ ->
-                viewLifecycleOwner.lifecycleScope.launch {
-                    val repo = com.tether.app.data.repository.GroupManagementRepository()
-                    val result = repo.leaveGroup(group.id)
-                    if (result.isSuccess) {
-                        TetherToast.show(requireContext(), "Left ${group.name}.")
-                        groupViewModel.loadUserGroups()
-                    } else {
-                        TetherToast.show(
-                            requireContext(),
-                            "Failed to leave group",
-                            isError = true
-                        )
-                    }
-                }
-            }
+            .setPositiveButton("Leave") { _, _ -> viewModel.leaveGroup(group) }
             .setNegativeButton("Cancel", null)
             .show()
-    }
-
-    private fun setupNotificationBell() {
-        updateBellDot()
-        binding.btnGroupsNotification.setOnClickListener {
-            NotificationStore.markRead(requireContext())
-            updateBellDot()
-            showNotificationsBottomSheet()
-        }
-    }
-
-    private fun updateBellDot() {
-        if (_binding == null) return
-        val hasUnread = NotificationStore.hasUnread(requireContext())
-        // Show/hide orange dot overlay on bell
-        binding.notifDot.visibility = if (hasUnread) View.VISIBLE else View.GONE
     }
 
     private fun showNotificationsBottomSheet() {
@@ -222,56 +173,6 @@ class GroupListFragment : Fragment() {
         }
 
         bottomSheet.show()
-    }
-
-    private fun startGroupActivityListeners() {
-        val currentUid = com.google.firebase.auth.FirebaseAuth.getInstance().currentUser?.uid ?: return
-        val firestore = com.google.firebase.firestore.FirebaseFirestore.getInstance()
-        val today = java.text.SimpleDateFormat("yyyy-MM-dd", java.util.Locale.getDefault()).format(java.util.Date())
-        val listenerStartTime = System.currentTimeMillis()
-
-        viewLifecycleOwner.lifecycleScope.launch {
-            groupViewModel.userGroupsState.collect { state ->
-                if (state is com.tether.app.ui.group.UserGroupsState.Success) {
-                    state.groups.forEach { group ->
-                        firestore.collection("logs")
-                            .whereEqualTo("groupId", group.id)
-                            .whereEqualTo("date", today)
-                            .addSnapshotListener { snapshot, _ ->
-                                snapshot?.documentChanges?.forEach { change ->
-                                    if (change.type == com.google.firebase.firestore.DocumentChange.Type.ADDED) {
-                                        val logCreatedAt = change.document.getLong("createdAt") ?: 0L
-                                        if (logCreatedAt <= listenerStartTime) return@forEach
-
-                                        val logUid = change.document.getString("userId") ?: ""
-                                        if (logUid != currentUid) {
-                                            val userName = change.document.getString("userName") ?: "Someone"
-                                            val hours = change.document.getDouble("value") ?: 0.0
-                                            val totalMins = (hours * 60).toInt()
-                                            val h = totalMins / 60
-                                            val m = totalMins % 60
-                                            val hoursStr = when {
-                                                h == 0 -> "${m}m"
-                                                m == 0 -> "${h}h"
-                                                else -> "${h}h ${m}m"
-                                            }
-                                            val message = "$userName logged $hoursStr in ${group.name}"
-                                            
-                                            if (!isAdded || _binding == null) return@forEach
-
-                                            NotificationStore.addNotification(requireContext(), message)
-                                            activity?.runOnUiThread {
-                                                if (!isAdded || _binding == null) return@runOnUiThread
-                                                updateBellDot()
-                                            }
-                                        }
-                                    }
-                                }
-                            }
-                    }
-                }
-            }
-        }
     }
 
     override fun onDestroyView() {

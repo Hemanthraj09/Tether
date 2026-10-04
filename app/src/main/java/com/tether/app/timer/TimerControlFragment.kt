@@ -3,23 +3,30 @@ package com.tether.app.timer
 import android.content.*
 import android.os.*
 import android.view.*
-import androidx.fragment.app.Fragment
+import androidx.core.os.bundleOf
+import androidx.lifecycle.Lifecycle
+import androidx.lifecycle.lifecycleScope
+import androidx.lifecycle.repeatOnLifecycle
 import com.google.android.material.bottomsheet.BottomSheetDialogFragment
 import com.tether.app.databinding.FragmentTimerControlBinding
+import kotlinx.coroutines.launch
 
 class TimerControlFragment : BottomSheetDialogFragment() {
 
     private var _binding: FragmentTimerControlBinding? = null
     private val binding get() = _binding!!
-    
+
     private var timerService: TetherTimerService? = null
     private var isBound = false
-    
+    private var sawActiveSession = false
+
     private val handler = Handler(Looper.getMainLooper())
     private val updateRunnable = object : Runnable {
         override fun run() {
             updateUI()
-            handler.postDelayed(this, 1000)
+            // Frequent, cheap refreshes keep the seconds ticking smoothly;
+            // views are only touched when the text actually changes.
+            handler.postDelayed(this, 250)
         }
     }
 
@@ -28,7 +35,8 @@ class TimerControlFragment : BottomSheetDialogFragment() {
             val binder = service as TetherTimerService.TimerBinder
             timerService = binder.getService()
             isBound = true
-            updateUI()
+            if (_binding != null) binding.btnStop.isEnabled = true
+            handler.removeCallbacks(updateRunnable)
             handler.post(updateRunnable)
         }
 
@@ -46,44 +54,63 @@ class TimerControlFragment : BottomSheetDialogFragment() {
     override fun onViewCreated(view: View, savedInstanceState: Bundle?) {
         super.onViewCreated(view, savedInstanceState)
 
+        // Enabled once the service is connected, so a stop never loses the time.
+        binding.btnStop.isEnabled = timerService != null
+
         binding.btnStop.setOnClickListener {
-            val focusSeconds = timerService?.focusSeconds ?: 0L
-            val groupId = timerService?.groupId ?: ""
-            timerService?.stopTimer()
-            val result = Bundle().apply {
-                putLong("focusSeconds", focusSeconds)
-                putString("groupId", groupId)
+            val service = timerService ?: return@setOnClickListener
+            if (!TetherTimerService.isRunning) {
+                dismiss()
+                return@setOnClickListener
             }
-            parentFragmentManager.setFragmentResult("timer_stopped", result)
+            binding.btnStop.isEnabled = false
+            val groupId = service.groupId
+            val focusSeconds = service.stopTimer()
+            parentFragmentManager.setFragmentResult(
+                RESULT_TIMER_STOPPED,
+                bundleOf(RESULT_FOCUS_SECONDS to focusSeconds, RESULT_GROUP_ID to groupId)
+            )
             dismiss()
         }
 
         binding.btnBreak5.setOnClickListener {
             timerService?.startBreak(5)
+            updateUI()
         }
 
         binding.btnBreak10.setOnClickListener {
             timerService?.startBreak(10)
+            updateUI()
+        }
+
+        // Close this sheet if the session ends from somewhere else.
+        viewLifecycleOwner.lifecycleScope.launch {
+            viewLifecycleOwner.repeatOnLifecycle(Lifecycle.State.STARTED) {
+                TetherTimerService.activeGroupId.collect { active ->
+                    if (active != null) sawActiveSession = true
+                    else if (sawActiveSession) dismissAllowingStateLoss()
+                }
+            }
         }
     }
 
     private fun updateUI() {
-        timerService?.let { service ->
-            binding.tvTimerDisplay.text = service.formatTime(service.currentSeconds)
-            
-            val phaseLabel = when (service.currentPhase) {
-                TetherTimerService.Phase.FOCUSING -> "Focusing"
-                TetherTimerService.Phase.BREAK -> "Break"
-            }
-            binding.tvPhaseLabel.text = phaseLabel
+        val b = _binding ?: return
+        val service = timerService ?: return
 
-            if (service.mode == TetherTimerService.TimerMode.STOPWATCH) {
-                binding.layoutBreakOptions.visibility = 
-                    if (service.currentPhase == TetherTimerService.Phase.FOCUSING) View.VISIBLE else View.GONE
-            } else {
-                binding.layoutBreakOptions.visibility = View.GONE
-            }
+        val time = service.formatTime(service.currentSeconds)
+        if (b.tvTimerDisplay.text.toString() != time) b.tvTimerDisplay.text = time
+
+        val phaseLabel = when (service.currentPhase) {
+            TetherTimerService.Phase.FOCUSING -> "Focusing"
+            TetherTimerService.Phase.BREAK -> "Break"
         }
+        if (b.tvPhaseLabel.text.toString() != phaseLabel) b.tvPhaseLabel.text = phaseLabel
+
+        val showBreaks = service.mode == TetherTimerService.TimerMode.STOPWATCH &&
+                service.currentPhase == TetherTimerService.Phase.FOCUSING
+        val visibility = if (showBreaks) View.VISIBLE else View.GONE
+        if (b.layoutBreakOptions.visibility != visibility) b.layoutBreakOptions.visibility = visibility
     }
 
     override fun onStart() {
@@ -100,6 +127,7 @@ class TimerControlFragment : BottomSheetDialogFragment() {
             requireContext().unbindService(connection)
             isBound = false
         }
+        timerService = null
     }
 
     override fun onDestroyView() {
@@ -108,6 +136,11 @@ class TimerControlFragment : BottomSheetDialogFragment() {
     }
 
     companion object {
+        const val TAG = "TimerControl"
+        const val RESULT_TIMER_STOPPED = "timer_stopped"
+        const val RESULT_FOCUS_SECONDS = "focusSeconds"
+        const val RESULT_GROUP_ID = "groupId"
+
         fun newInstance(): TimerControlFragment = TimerControlFragment()
     }
 }
