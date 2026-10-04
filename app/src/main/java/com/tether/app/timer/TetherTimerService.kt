@@ -15,37 +15,25 @@ import java.util.*
 /**
  * Focus timer running as a foreground service.
  *
- * Time is computed from SystemClock.elapsedRealtime() timestamps rather than
- * by counting ticks, so it stays exact when the screen is off or the CPU
- * sleeps. State is persisted, so a session survives the app process being
- * killed (common on MIUI/HyperOS) and is restored on the next launch.
+ * All time-keeping lives in the pure [TimerEngine]; this class only handles
+ * Android concerns: foreground notification, persistence (a session survives
+ * the process being killed, common on MIUI/HyperOS) and binding.
  */
 class TetherTimerService : Service() {
-
-    enum class TimerMode { STOPWATCH, POMODORO }
-    enum class Phase { FOCUSING, BREAK }
 
     private val binder = TimerBinder()
     private val handler = Handler(Looper.getMainLooper())
 
-    var mode = TimerMode.STOPWATCH
-        private set
-    var currentPhase = Phase.FOCUSING
-        private set
+    private var state: TimerState? = null
+
     var groupId = ""
         private set
 
-    private var pomodoroFocusMinutes = 25
-    private var pomodoroBreakMinutes = 5
+    val mode: TimerMode
+        get() = state?.mode ?: TimerMode.STOPWATCH
 
-    /** Focus time completed in earlier phases. */
-    private var focusAccumMs = 0L
-    /** elapsedRealtime when the current phase started. */
-    private var phaseStartAt = 0L
-    /** elapsedRealtime when the current countdown phase ends (Pomodoro, or stopwatch break). */
-    private var phaseEndAt = 0L
-    private var breakLengthMs = 0L
-    private var breakWarned = false
+    val currentPhase: TimerPhase
+        get() = state?.phase ?: TimerPhase.FOCUSING
 
     private val tick = object : Runnable {
         override fun run() {
@@ -102,23 +90,17 @@ class TetherTimerService : Service() {
 
     private fun startNewSession(intent: Intent) {
         groupId = intent.getStringExtra(EXTRA_GROUP_ID) ?: ""
-        mode = try {
-            TimerMode.valueOf(intent.getStringExtra(EXTRA_MODE) ?: "STOPWATCH")
+        val mode = try {
+            TimerMode.valueOf(intent.getStringExtra(EXTRA_MODE) ?: TimerMode.STOPWATCH.name)
         } catch (e: IllegalArgumentException) {
             TimerMode.STOPWATCH
         }
-        val now = SystemClock.elapsedRealtime()
-        currentPhase = Phase.FOCUSING
-        focusAccumMs = 0L
-        phaseStartAt = now
-        breakWarned = false
-        if (mode == TimerMode.POMODORO) {
-            pomodoroFocusMinutes = intent.getIntExtra(EXTRA_POMO_FOCUS, 25)
-            pomodoroBreakMinutes = intent.getIntExtra(EXTRA_POMO_BREAK, 5)
-            phaseEndAt = now + pomodoroFocusMinutes * 60_000L
-        } else {
-            phaseEndAt = 0L
-        }
+        state = TimerEngine.start(
+            mode = mode,
+            now = SystemClock.elapsedRealtime(),
+            focusMinutes = intent.getIntExtra(EXTRA_POMO_FOCUS, 25),
+            breakMinutes = intent.getIntExtra(EXTRA_POMO_BREAK, 5)
+        )
         saveState()
     }
 
@@ -128,102 +110,48 @@ class TetherTimerService : Service() {
         super.onDestroy()
     }
 
-    // ── Time keeping ─────────────────────────────────────────────
+    // ── Time keeping (delegates to TimerEngine) ──────────────────
 
-    /** Moves through any phase boundaries that have passed. */
     private fun advance() {
-        if (!hasSession) return
-        val now = SystemClock.elapsedRealtime()
-        var changed = false
-
-        if (mode == TimerMode.STOPWATCH) {
-            if (currentPhase == Phase.BREAK && now >= phaseEndAt) {
-                currentPhase = Phase.FOCUSING
-                phaseStartAt = phaseEndAt  // focus resumes exactly when the break ended
-                changed = true
-            }
-        } else {
-            while (now >= phaseEndAt) {
-                if (currentPhase == Phase.FOCUSING) {
-                    focusAccumMs += pomodoroFocusMinutes * 60_000L
-                    currentPhase = Phase.BREAK
-                    breakLengthMs = pomodoroBreakMinutes * 60_000L
-                    phaseStartAt = phaseEndAt
-                    phaseEndAt += breakLengthMs
-                } else {
-                    currentPhase = Phase.FOCUSING
-                    phaseStartAt = phaseEndAt
-                    phaseEndAt += pomodoroFocusMinutes * 60_000L
-                }
-                breakWarned = false
-                changed = true
-            }
-        }
-
-        if (currentPhase == Phase.BREAK && !breakWarned &&
-            breakLengthMs > 120_000L && phaseEndAt - now <= 120_000L
-        ) {
-            breakWarned = true
-            sendBreakWarning()
-            changed = true
-        }
-
-        if (changed) {
+        val current = state ?: return
+        val result = TimerEngine.advance(current, SystemClock.elapsedRealtime())
+        state = result.state
+        if (result.warnBreakEnding) sendBreakWarning()
+        if (result.phaseChanged) {
             saveState()
             updateNotification()
         }
-    }
-
-    /** False until a session has actually been started or restored. */
-    private val hasSession: Boolean
-        get() = phaseStartAt != 0L
-
-    private fun focusMillis(now: Long = SystemClock.elapsedRealtime()): Long {
-        if (!hasSession) return 0L
-        return focusAccumMs + if (currentPhase == Phase.FOCUSING) now - phaseStartAt else 0L
     }
 
     /** Focus time only (breaks excluded). */
     val focusSeconds: Long
         get() {
             advance()
-            return focusMillis() / 1000
+            val s = state ?: return 0L
+            return TimerEngine.focusMillis(s, SystemClock.elapsedRealtime()) / 1000
         }
 
     /** What the timer face shows: elapsed focus (stopwatch) or time left (countdowns). */
     val currentSeconds: Long
         get() {
             advance()
-            if (!hasSession) return 0L
-            val now = SystemClock.elapsedRealtime()
-            return if (mode == TimerMode.STOPWATCH && currentPhase == Phase.FOCUSING) {
-                focusMillis(now) / 1000
-            } else {
-                ((phaseEndAt - now).coerceAtLeast(0L) + 999) / 1000
-            }
+            val s = state ?: return 0L
+            return TimerEngine.displaySeconds(s, SystemClock.elapsedRealtime())
         }
 
     fun startBreak(minutes: Int) {
-        if (mode != TimerMode.STOPWATCH || currentPhase != Phase.FOCUSING) return
-        val now = SystemClock.elapsedRealtime()
-        focusAccumMs += now - phaseStartAt
-        currentPhase = Phase.BREAK
-        breakLengthMs = minutes * 60_000L
-        phaseStartAt = now
-        phaseEndAt = now + breakLengthMs
-        breakWarned = false
+        val s = state ?: return
+        state = TimerEngine.startBreak(s, minutes, SystemClock.elapsedRealtime()) ?: return
         saveState()
         updateNotification()
     }
 
     /** Stops the session and returns the focused seconds to log. */
     fun stopTimer(): Long {
-        advance()
-        val seconds = focusMillis() / 1000
+        val seconds = focusSeconds
         handler.removeCallbacks(tick)
         clearState()
-        phaseStartAt = 0L
-        focusAccumMs = 0L
+        state = null
         _activeGroupId.value = null
         stopForeground(STOP_FOREGROUND_REMOVE)
         stopSelf()
@@ -246,18 +174,19 @@ class TetherTimerService : Service() {
     private fun prefs() = getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE)
 
     private fun saveState() {
+        val s = state ?: return
         prefs().edit()
             .putBoolean(KEY_ACTIVE, true)
             .putString(KEY_GROUP, groupId)
-            .putString(KEY_MODE, mode.name)
-            .putString(KEY_PHASE, currentPhase.name)
-            .putLong(KEY_FOCUS_ACCUM, focusAccumMs)
-            .putLong(KEY_PHASE_START, phaseStartAt)
-            .putLong(KEY_PHASE_END, phaseEndAt)
-            .putLong(KEY_BREAK_LEN, breakLengthMs)
-            .putBoolean(KEY_BREAK_WARNED, breakWarned)
-            .putInt(KEY_POMO_FOCUS, pomodoroFocusMinutes)
-            .putInt(KEY_POMO_BREAK, pomodoroBreakMinutes)
+            .putString(KEY_MODE, s.mode.name)
+            .putString(KEY_PHASE, s.phase.name)
+            .putLong(KEY_FOCUS_ACCUM, s.focusAccumMs)
+            .putLong(KEY_PHASE_START, s.phaseStartAt)
+            .putLong(KEY_PHASE_END, s.phaseEndAt)
+            .putLong(KEY_BREAK_LEN, s.breakLengthMs)
+            .putBoolean(KEY_BREAK_WARNED, s.breakWarned)
+            .putInt(KEY_POMO_FOCUS, s.pomodoroFocusMinutes)
+            .putInt(KEY_POMO_BREAK, s.pomodoroBreakMinutes)
             .putLong(KEY_SAVED_ELAPSED, SystemClock.elapsedRealtime())
             .putLong(KEY_SAVED_WALL, System.currentTimeMillis())
             .apply()
@@ -268,26 +197,24 @@ class TetherTimerService : Service() {
         if (!p.getBoolean(KEY_ACTIVE, false)) return false
         return try {
             groupId = p.getString(KEY_GROUP, "") ?: ""
-            mode = TimerMode.valueOf(p.getString(KEY_MODE, TimerMode.STOPWATCH.name)!!)
-            currentPhase = Phase.valueOf(p.getString(KEY_PHASE, Phase.FOCUSING.name)!!)
-            focusAccumMs = p.getLong(KEY_FOCUS_ACCUM, 0L)
-            phaseStartAt = p.getLong(KEY_PHASE_START, 0L)
-            phaseEndAt = p.getLong(KEY_PHASE_END, 0L)
-            breakLengthMs = p.getLong(KEY_BREAK_LEN, 0L)
-            breakWarned = p.getBoolean(KEY_BREAK_WARNED, false)
-            pomodoroFocusMinutes = p.getInt(KEY_POMO_FOCUS, 25)
-            pomodoroBreakMinutes = p.getInt(KEY_POMO_BREAK, 5)
-
-            // elapsedRealtime restarts from 0 after a reboot: shift timestamps
-            // using the wall clock so the session continues correctly.
-            val savedElapsed = p.getLong(KEY_SAVED_ELAPSED, 0L)
-            val savedWall = p.getLong(KEY_SAVED_WALL, 0L)
-            val nowElapsed = SystemClock.elapsedRealtime()
-            if (nowElapsed < savedElapsed) {
-                val shift = nowElapsed - (savedElapsed + (System.currentTimeMillis() - savedWall))
-                phaseStartAt += shift
-                if (phaseEndAt != 0L) phaseEndAt += shift
-            }
+            val saved = TimerState(
+                mode = TimerMode.valueOf(p.getString(KEY_MODE, TimerMode.STOPWATCH.name)!!),
+                phase = TimerPhase.valueOf(p.getString(KEY_PHASE, TimerPhase.FOCUSING.name)!!),
+                focusAccumMs = p.getLong(KEY_FOCUS_ACCUM, 0L),
+                phaseStartAt = p.getLong(KEY_PHASE_START, 0L),
+                phaseEndAt = p.getLong(KEY_PHASE_END, 0L),
+                breakLengthMs = p.getLong(KEY_BREAK_LEN, 0L),
+                breakWarned = p.getBoolean(KEY_BREAK_WARNED, false),
+                pomodoroFocusMinutes = p.getInt(KEY_POMO_FOCUS, 25),
+                pomodoroBreakMinutes = p.getInt(KEY_POMO_BREAK, 5)
+            )
+            state = TimerEngine.restoreAfterSave(
+                saved,
+                savedElapsed = p.getLong(KEY_SAVED_ELAPSED, 0L),
+                savedWall = p.getLong(KEY_SAVED_WALL, 0L),
+                nowElapsed = SystemClock.elapsedRealtime(),
+                nowWall = System.currentTimeMillis()
+            )
             advance()
             true
         } catch (e: Exception) {
@@ -325,13 +252,17 @@ class TetherTimerService : Service() {
         )
         val now = SystemClock.elapsedRealtime()
         val wallNow = System.currentTimeMillis()
-        val countUp = mode == TimerMode.STOPWATCH && currentPhase == Phase.FOCUSING
-        val chronometerBase = if (countUp) wallNow - focusMillis(now)
-            else wallNow + (phaseEndAt - now).coerceAtLeast(0L)
+        val s = state
+        val countUp = s == null || (s.mode == TimerMode.STOPWATCH && s.phase == TimerPhase.FOCUSING)
+        val chronometerBase = when {
+            s == null -> wallNow
+            countUp -> wallNow - TimerEngine.focusMillis(s, now)
+            else -> wallNow + (s.phaseEndAt - now).coerceAtLeast(0L)
+        }
 
         return NotificationCompat.Builder(this, CHANNEL_ID)
             .setContentTitle("Tether — Active Session")
-            .setContentText(if (currentPhase == Phase.FOCUSING) "Focusing" else "Break")
+            .setContentText(if (currentPhase == TimerPhase.FOCUSING) "Focusing" else "Break")
             .setSmallIcon(R.drawable.ic_flame)
             .setOngoing(true)
             .setContentIntent(pendingIntent)

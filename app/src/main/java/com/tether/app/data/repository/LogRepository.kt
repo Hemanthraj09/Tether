@@ -6,6 +6,7 @@ import com.google.firebase.firestore.FirebaseFirestore
 import com.google.firebase.firestore.SetOptions
 import com.tether.app.data.UserCache
 import com.tether.app.data.model.Log
+import com.tether.app.domain.StreakCalculator
 import com.tether.app.utils.DateKeys
 import com.tether.app.utils.Formatters
 import kotlinx.coroutines.async
@@ -54,15 +55,14 @@ class LogRepository {
                 name.await() to streak.await()
             }
 
-            val lastLogDate = streakDoc?.getString("lastLogDate") ?: ""
-            val currentStreak = streakDoc?.getLong("currentStreak")?.toInt() ?: 0
-            val longestStreak = streakDoc?.getLong("longestStreak")?.toInt() ?: 0
-
-            val newStreak = when (lastLogDate) {
-                today -> currentStreak
-                DateKeys.previousDay(today) -> currentStreak + 1
-                else -> 1
+            val previous = streakDoc?.takeIf { it.exists() }?.let {
+                StreakCalculator.Streak(
+                    current = it.getLong("currentStreak")?.toInt() ?: 0,
+                    longest = it.getLong("longestStreak")?.toInt() ?: 0,
+                    lastLogDate = it.getString("lastLogDate") ?: ""
+                )
             }
+            val newStreak = StreakCalculator.afterLog(previous, today)
 
             val logRef = firestore.collection("logs").document()
             val log = Log(
@@ -88,9 +88,9 @@ class LogRepository {
                 set(firestore.collection("users").document(uid),
                     mapOf("totalHours" to increment), SetOptions.merge())
                 set(streakRef, mapOf(
-                    "lastLogDate" to today,
-                    "currentStreak" to newStreak,
-                    "longestStreak" to maxOf(newStreak, longestStreak)
+                    "lastLogDate" to newStreak.lastLogDate,
+                    "currentStreak" to newStreak.current,
+                    "longestStreak" to newStreak.longest
                 ), SetOptions.merge())
             }.commit().await()
 

@@ -8,7 +8,8 @@ import com.tether.app.data.hoursByUid
 import com.tether.app.data.model.Group
 import com.tether.app.data.snapshotFlow
 import com.tether.app.utils.DateKeys
-import com.tether.app.utils.Formatters
+import com.tether.app.domain.LeaderboardBuilder
+import com.tether.app.domain.LeaderboardBuilder.StreakInfo
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.flow.Flow
@@ -89,40 +90,17 @@ class LeaderboardRepository {
 
         return combine(groupFlow, namesFlow, statsFlow) { group, names, stats ->
             if (group == null) return@combine emptyList()
-
-            group.members.map { uid ->
-                val name = names[uid] ?: "Unknown"
-                val todayHours = stats.today[uid] ?: 0.0
-                val yesterdayHours = stats.yesterday[uid] ?: 0.0
-
-                // A streak only counts if the last log was today or yesterday.
-                val streakInfo = stats.streaks[uid]
-                val streak = if (streakInfo != null &&
-                    (streakInfo.lastLogDate == today || streakInfo.lastLogDate == yesterday)
-                ) streakInfo.current else 0
-
-                // Pace: only shown when behind yesterday.
-                val paceLabel = if (yesterdayHours > 0.5 && todayHours < yesterdayHours) {
-                    val totalMins = ((yesterdayHours - todayHours) * 60).toInt()
-                    val hrs = totalMins / 60
-                    val mins = totalMins % 60
-                    if (hrs > 0) "${hrs}h ${mins}m behind yesterday"
-                    else "${mins}m behind yesterday"
-                } else ""
-
-                LeaderboardEntry(
-                    uid = uid,
-                    name = name,
-                    initials = Formatters.initials(name),
-                    hours = stats.weekly[uid] ?: 0.0,
-                    todayHours = todayHours,
-                    streak = streak,
-                    avatarColorHex = Formatters.avatarColor(uid),
-                    isCurrentUser = uid == me,
-                    paceLabel = paceLabel,
-                    hasNudgedToday = uid in stats.nudged
-                )
-            }.sortedByDescending { it.todayHours }
+            LeaderboardBuilder.build(
+                members = group.members,
+                names = names,
+                todayHours = stats.today,
+                yesterdayHours = stats.yesterday,
+                weeklyHours = stats.weekly,
+                streaks = stats.streaks,
+                nudgedByMe = stats.nudged,
+                currentUid = me,
+                today = today
+            )
         }
     }
 
@@ -145,8 +123,6 @@ class LeaderboardRepository {
         current = getLong("currentStreak")?.toInt() ?: 0,
         lastLogDate = getString("lastLogDate") ?: ""
     )
-
-    private data class StreakInfo(val current: Int, val lastLogDate: String)
 
     private data class Stats(
         val today: Map<String, Double>,

@@ -5,6 +5,7 @@ import androidx.lifecycle.viewModelScope
 import com.google.firebase.auth.FirebaseAuth
 import com.google.firebase.firestore.FirebaseFirestore
 import com.tether.app.data.snapshotFlow
+import com.tether.app.domain.StreakCalculator
 import com.tether.app.utils.DateKeys
 import com.tether.app.utils.Formatters
 import kotlinx.coroutines.Dispatchers
@@ -111,7 +112,7 @@ class ProfileViewModel : ViewModel() {
                 .map { doc ->
                     val streak = doc?.getLong("currentStreak")?.toInt() ?: 0
                     val last = doc?.getString("lastLogDate") ?: ""
-                    if (last == DateKeys.today() || last == DateKeys.yesterday()) streak else 0
+                    StreakCalculator.displayed(streak, last, DateKeys.today())
                 }
         }
         return combine(flows) { streaks -> streaks.maxOrNull() ?: 0 }

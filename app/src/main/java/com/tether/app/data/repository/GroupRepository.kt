@@ -9,6 +9,7 @@ import com.tether.app.data.UserCache
 import com.tether.app.data.model.Group
 import com.tether.app.data.model.Log
 import com.tether.app.data.snapshotFlow
+import com.tether.app.domain.InviteCodes
 import com.tether.app.utils.DateKeys
 import com.tether.app.utils.Formatters
 import kotlinx.coroutines.ExperimentalCoroutinesApi
@@ -73,7 +74,7 @@ class GroupRepository {
         return try {
             val uid = currentUid
             // Accept codes typed with spaces/dashes (the hint shows "X7Y9-Z2").
-            val code = inviteCode.uppercase().filter { it.isLetterOrDigit() }
+            val code = InviteCodes.normalize(inviteCode)
             if (code.isEmpty()) {
                 return Result.failure(Exception("Please enter an invite code"))
             }
@@ -184,7 +185,7 @@ class GroupRepository {
 
     private suspend fun generateUniqueInviteCode(): String {
         repeat(5) {
-            val code = generateInviteCode()
+            val code = InviteCodes.generate()
             val taken = try {
                 !firestore.collection("groups")
                     .whereEqualTo("inviteCode", code)
@@ -196,14 +197,7 @@ class GroupRepository {
             }
             if (!taken) return code
         }
-        return generateInviteCode()
-    }
-
-    private fun generateInviteCode(): String {
-        val chars = "ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789"
-        return (1..6)
-            .map { chars.random() }
-            .joinToString("")
+        return InviteCodes.generate()
     }
 
     private suspend fun writeSystemLog(

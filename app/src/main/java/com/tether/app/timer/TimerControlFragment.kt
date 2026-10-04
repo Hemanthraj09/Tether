@@ -102,13 +102,13 @@ class TimerControlFragment : BottomSheetDialogFragment() {
         if (b.tvTimerDisplay.text.toString() != time) b.tvTimerDisplay.text = time
 
         val phaseLabel = when (service.currentPhase) {
-            TetherTimerService.Phase.FOCUSING -> "Focusing"
-            TetherTimerService.Phase.BREAK -> "Break"
+            TimerPhase.FOCUSING -> "Focusing"
+            TimerPhase.BREAK -> "Break"
         }
         if (b.tvPhaseLabel.text.toString() != phaseLabel) b.tvPhaseLabel.text = phaseLabel
 
-        val showBreaks = service.mode == TetherTimerService.TimerMode.STOPWATCH &&
-                service.currentPhase == TetherTimerService.Phase.FOCUSING
+        val showBreaks = service.mode == TimerMode.STOPWATCH &&
+                service.currentPhase == TimerPhase.FOCUSING
         val visibility = if (showBreaks) View.VISIBLE else View.GONE
         if (b.layoutBreakOptions.visibility != visibility) b.layoutBreakOptions.visibility = visibility
     }

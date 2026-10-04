@@ -53,77 +53,26 @@ class HeatmapView @JvmOverloads constructor(
         0xFF6BF080.toInt()   // 12h
     ).map { c -> Paint(Paint.ANTI_ALIAS_FLAG).apply { color = c } }
 
-    private val monthNames = listOf("Jan", "Feb", "Mar", "Apr", "May", "Jun",
-        "Jul", "Aug", "Sep", "Oct", "Nov", "Dec")
-
-    private var levels = IntArray(0)           // per cell, column-major (col * 7 + row)
-    private var monthLabels = emptyMap<Int, String>()  // column → label
-    private var columns = 0
-    private var todayIndex = -1
+    private var grid = HeatmapGrid.build(
+        Calendar.getInstance().get(Calendar.YEAR), emptyMap(), ""
+    )
 
     private val rect = RectF()
 
-    init {
-        setData(Calendar.getInstance().get(Calendar.YEAR), emptyMap())
-    }
-
     /** [hoursByDate] is keyed by "yyyy-MM-dd". */
     fun setData(year: Int, hoursByDate: Map<String, Double>) {
-        val sdf = SimpleDateFormat("yyyy-MM-dd", Locale.US)
-        val todayStr = sdf.format(Calendar.getInstance().time)
-
-        // Jan 1 aligned back to Monday … Dec 31, padded to whole weeks.
-        val start = Calendar.getInstance().apply {
-            clear()
-            set(year, Calendar.JANUARY, 1)
-            while (get(Calendar.DAY_OF_WEEK) != Calendar.MONDAY) add(Calendar.DAY_OF_MONTH, -1)
-        }
-        val end = Calendar.getInstance().apply {
-            clear()
-            set(year, Calendar.DECEMBER, 31)
-        }
-
-        val levelList = ArrayList<Int>(380)
-        val labels = HashMap<Int, String>()
-        var lastMonth = -1
-        var today = -1
-        while (!start.after(end)) {
-            val index = levelList.size
-            val dateStr = sdf.format(start.time)
-            val hours = hoursByDate[dateStr] ?: 0.0
-            levelList.add(when {
-                hours <= 0.0 -> 0
-                hours >= 12.0 -> 12
-                else -> hours.toInt().coerceIn(1, 12)
-            })
-            if (dateStr == todayStr) today = index
-
-            // Month label on the first column whose Monday falls in a new month.
-            if (index % 7 == 0 && start.get(Calendar.YEAR) == year) {
-                val month = start.get(Calendar.MONTH)
-                if (month != lastMonth) {
-                    labels[index / 7] = monthNames[month]
-                    lastMonth = month
-                }
-            }
-            start.add(Calendar.DAY_OF_MONTH, 1)
-        }
-        while (levelList.size % 7 != 0) levelList.add(-1)  // padding (not drawn)
-
-        levels = levelList.toIntArray()
-        monthLabels = labels
-        columns = levels.size / 7
-        todayIndex = today
+        val today = SimpleDateFormat("yyyy-MM-dd", Locale.US).format(Calendar.getInstance().time)
+        grid = HeatmapGrid.build(year, hoursByDate, today)
         requestLayout()
         invalidate()
     }
 
     /** X position (px) of the column containing today, or -1. */
     fun todayColumnX(): Int =
-        if (todayIndex < 0) -1 else ((todayIndex / 7) * pitch).toInt()
+        if (grid.todayIndex < 0) -1 else ((grid.todayIndex / 7) * pitch).toInt()
 
     override fun onMeasure(widthMeasureSpec: Int, heightMeasureSpec: Int) {
-        val width = (columns * pitch).toInt()
+        val width = (grid.columns * pitch).toInt()
         val height = (labelHeight + 7 * pitch).toInt()
         setMeasuredDimension(width, height)
     }
@@ -131,9 +80,10 @@ class HeatmapView @JvmOverloads constructor(
     override fun onDraw(canvas: Canvas) {
         super.onDraw(canvas)
         val baseline = -labelPaint.ascent()
-        for ((col, label) in monthLabels) {
+        for ((col, label) in grid.monthLabels) {
             canvas.drawText(label, col * pitch + cellMargin, baseline, labelPaint)
         }
+        val levels = grid.levels
         for (i in levels.indices) {
             val level = levels[i]
             if (level < 0) continue

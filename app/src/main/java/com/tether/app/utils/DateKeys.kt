@@ -38,10 +38,9 @@ object DateKeys {
      * (same as before), but the year is the *week-year*, so the last days of
      * December no longer collide with week 1 of the same calendar year.
      */
-    fun weekKey(): String {
-        val cal = Calendar.getInstance()
-        val week = cal.get(Calendar.WEEK_OF_YEAR)
-        val year = cal.weekYear
+    fun weekKey(calendar: Calendar = Calendar.getInstance()): String {
+        val week = calendar.get(Calendar.WEEK_OF_YEAR)
+        val year = calendar.weekYear
         return "$year-W$week"
     }
 

@@ -23,7 +23,7 @@ class TimerModeDialogFragment : DialogFragment() {
         super.onViewCreated(view, savedInstanceState)
 
         binding.btnNormal.setOnClickListener {
-            startTimer(TetherTimerService.TimerMode.STOPWATCH)
+            startTimer(TimerMode.STOPWATCH)
         }
 
         binding.btnPomodoro.setOnClickListener {
@@ -32,11 +32,11 @@ class TimerModeDialogFragment : DialogFragment() {
         }
 
         binding.btnPomo25.setOnClickListener {
-            startTimer(TetherTimerService.TimerMode.POMODORO, 25, 5)
+            startTimer(TimerMode.POMODORO, 25, 5)
         }
 
         binding.btnPomo50.setOnClickListener {
-            startTimer(TetherTimerService.TimerMode.POMODORO, 50, 10)
+            startTimer(TimerMode.POMODORO, 50, 10)
         }
     }
 
@@ -51,11 +51,11 @@ class TimerModeDialogFragment : DialogFragment() {
         }
     }
 
-    private fun startTimer(mode: TetherTimerService.TimerMode, focusMins: Int = 0, breakMins: Int = 0) {
+    private fun startTimer(mode: TimerMode, focusMins: Int = 0, breakMins: Int = 0) {
         val intent = Intent(requireContext(), TetherTimerService::class.java).apply {
             putExtra(TetherTimerService.EXTRA_GROUP_ID, groupId)
             putExtra(TetherTimerService.EXTRA_MODE, mode.name)
-            if (mode == TetherTimerService.TimerMode.POMODORO) {
+            if (mode == TimerMode.POMODORO) {
                 putExtra(TetherTimerService.EXTRA_POMO_FOCUS, focusMins)
                 putExtra(TetherTimerService.EXTRA_POMO_BREAK, breakMins)
             }
