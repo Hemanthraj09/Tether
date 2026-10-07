@@ -1,0 +1,23 @@
+name: LeetCode canary
+
+# Checks every day that LeetCode's API still matches the queries the app uses.
+# A failure here means: patch the query via Firebase Remote Config
+# (leetcode_profile_query / leetcode_recent_query) before users notice.
+on:
+  schedule:
+    - cron: '30 3 * * *'   # 09:00 IST daily
+  workflow_dispatch:
+  push:
+    paths:
+      - app/src/main/assets/leetcode/queries.json
+      - .github/scripts/leetcode-canary.mjs
+
+jobs:
+  canary:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - run: node .github/scripts/leetcode-canary.mjs
