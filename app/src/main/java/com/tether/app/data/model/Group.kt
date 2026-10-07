@@ -8,5 +8,7 @@ data class Group(
     val inviteCode: String = "",
     val createdBy: String = "",
     val isSolo: Boolean = false,
-    val createdAt: Long = 0L
+    val createdAt: Long = 0L,
+    /** Track this group is racing through ("" = none). Only offered for goals that have tracks. */
+    val trackId: String = ""
 )

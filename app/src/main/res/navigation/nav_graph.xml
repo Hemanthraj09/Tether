@@ -51,7 +51,15 @@
         android:id="@+id/groupFeedFragment"
         android:name="com.tether.app.ui.home.GroupFeedFragment"
         android:label="Feed"
-        tools:layout="@layout/fragment_group_feed" />
+        tools:layout="@layout/fragment_group_feed">
+        <action
+            android:id="@+id/action_feed_to_track"
+            app:destination="@id/trackFragment"
+            app:enterAnim="@anim/slide_in_right"
+            app:exitAnim="@anim/slide_out_left"
+            app:popEnterAnim="@anim/slide_in_left"
+            app:popExitAnim="@anim/slide_out_right" />
+    </fragment>
 
 
     <fragment
@@ -105,6 +113,13 @@
             app:popEnterAnim="@anim/slide_in_left"
             app:popExitAnim="@anim/slide_out_right" />
         <action
+            android:id="@+id/action_profile_to_track"
+            app:destination="@id/trackFragment"
+            app:enterAnim="@anim/slide_in_right"
+            app:exitAnim="@anim/slide_out_left"
+            app:popEnterAnim="@anim/slide_in_left"
+            app:popExitAnim="@anim/slide_out_right" />
+        <action
             android:id="@+id/action_profile_to_faq"
             app:destination="@id/faqFragment"
             app:enterAnim="@anim/slide_in_right"
@@ -124,6 +139,20 @@
         android:name="com.tether.app.ui.profile.FaqFragment"
         android:label="FAQ"
         tools:layout="@layout/fragment_faq" />
+
+    <fragment
+        android:id="@+id/trackFragment"
+        android:name="com.tether.app.ui.tracks.TrackFragment"
+        android:label="Track"
+        tools:layout="@layout/fragment_track">
+        <argument
+            android:name="trackId"
+            app:argType="string" />
+        <argument
+            android:name="groupId"
+            android:defaultValue=""
+            app:argType="string" />
+    </fragment>
 
     <fragment
         android:id="@+id/groupFragment"

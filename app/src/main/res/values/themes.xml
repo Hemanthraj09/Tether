@@ -50,4 +50,17 @@
     <style name="BottomNavTextStyle" parent="TextAppearance.Material3.LabelMedium">
         <item name="android:textSize">10sp</item>
     </style>
+
+    <!-- Tiny initials avatar showing which group members completed a track item -->
+    <style name="SolverDot">
+        <item name="android:layout_width">18dp</item>
+        <item name="android:layout_height">18dp</item>
+        <item name="android:layout_marginEnd">-4dp</item>
+        <item name="android:background">@drawable/bg_avatar_circle</item>
+        <item name="android:gravity">center</item>
+        <item name="android:textColor">@color/colorTextPrimary</item>
+        <item name="android:textSize">8sp</item>
+        <item name="android:textStyle">bold</item>
+        <item name="android:visibility">gone</item>
+    </style>
 </resources>

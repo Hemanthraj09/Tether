@@ -35,6 +35,18 @@ class GroupManagementRepository {
         }
     }
 
+    /** Creator picks (or clears, with "") the track the group races through. */
+    suspend fun setTrack(groupId: String, trackId: String): Result<Unit> {
+        return try {
+            firestore.collection("groups").document(groupId)
+                .update("trackId", trackId)
+                .await()
+            Result.success(Unit)
+        } catch (e: Exception) {
+            Result.failure(e)
+        }
+    }
+
     suspend fun leaveGroup(
         groupId: String
     ): Result<Unit> {

@@ -138,7 +138,21 @@ object RealtimeWatcher {
                 }
             listOf(logs, nudges)
         }
-        return merge(*flows.toTypedArray())
+
+        // Verified solves synced by people you share a group with (e.g. from LeetCode).
+        // Single range filter → no composite index; the source is filtered client-side.
+        val solves = groups.flatMap { it.members }.toSet().minus(uid).map { memberUid ->
+            firestore.collection("users").document(memberUid).collection("completions")
+                .whereGreaterThan("syncedAt", watcherStartedAt)
+                .snapshotFlow()
+                .addedEvents { doc ->
+                    if (doc.getString("source") != "leetcode") return@addedEvents null
+                    val name = doc.getString("userName") ?: "Someone"
+                    val title = doc.getString("title") ?: return@addedEvents null
+                    Event.GroupLog(doc.reference.path, "$name solved $title ✓", doc.getLong("syncedAt") ?: 0L)
+                }
+        }
+        return merge(*(flows + solves).toTypedArray())
     }
 
     /** Emits mapped events for documents newly ADDED to a query. */
