@@ -1,0 +1,174 @@
+{
+ "data": {
+  "matchedUser": {
+   "username": "sample_user",
+   "profile": {
+    "ranking": 123456
+   },
+   "submitStatsGlobal": {
+    "acSubmissionNum": [
+     {
+      "difficulty": "All",
+      "count": 120
+     },
+     {
+      "difficulty": "Easy",
+      "count": 60
+     },
+     {
+      "difficulty": "Medium",
+      "count": 50
+     },
+     {
+      "difficulty": "Hard",
+      "count": 10
+     }
+    ]
+   },
+   "userCalendar": {
+    "streak": 7,
+    "totalActiveDays": 42
+   },
+   "tagProblemCounts": {
+    "advanced": [
+     {
+      "tagName": "Game Theory",
+      "problemsSolved": 0
+     },
+     {
+      "tagName": "Backtracking",
+      "problemsSolved": 0
+     },
+     {
+      "tagName": "Quickselect",
+      "problemsSolved": 0
+     },
+     {
+      "tagName": "Dynamic Programming",
+      "problemsSolved": 0
+     },
+     {
+      "tagName": "Divide and Conquer",
+      "problemsSolved": 0
+     },
+     {
+      "tagName": "Trie",
+      "problemsSolved": 0
+     },
+     {
+      "tagName": "Union-Find",
+      "problemsSolved": 0
+     },
+     {
+      "tagName": "Monotonic Stack",
+      "problemsSolved": 0
+     },
+     {
+      "tagName": "Monotonic Queue",
+      "problemsSolved": 0
+     }
+    ],
+    "intermediate": [
+     {
+      "tagName": "Tree",
+      "problemsSolved": 10
+     },
+     {
+      "tagName": "Binary Tree",
+      "problemsSolved": 7
+     },
+     {
+      "tagName": "Hash Table",
+      "problemsSolved": 4
+     },
+     {
+      "tagName": "Graph Theory",
+      "problemsSolved": 1
+     },
+     {
+      "tagName": "Greedy",
+      "problemsSolved": 0
+     },
+     {
+      "tagName": "Binary Search",
+      "problemsSolved": 0
+     },
+     {
+      "tagName": "Depth-First Search",
+      "problemsSolved": 0
+     },
+     {
+      "tagName": "Breadth-First Search",
+      "problemsSolved": 0
+     },
+     {
+      "tagName": "Recursion",
+      "problemsSolved": 0
+     },
+     {
+      "tagName": "Sliding Window",
+      "problemsSolved": 0
+     },
+     {
+      "tagName": "Bit Manipulation",
+      "problemsSolved": 0
+     },
+     {
+      "tagName": "Math",
+      "problemsSolved": 0
+     },
+     {
+      "tagName": "Design",
+      "problemsSolved": 0
+     },
+     {
+      "tagName": "Database",
+      "problemsSolved": 0
+     }
+    ],
+    "fundamental": [
+     {
+      "tagName": "Array",
+      "problemsSolved": 40
+     },
+     {
+      "tagName": "Matrix",
+      "problemsSolved": 37
+     },
+     {
+      "tagName": "String",
+      "problemsSolved": 34
+     },
+     {
+      "tagName": "Simulation",
+      "problemsSolved": 31
+     },
+     {
+      "tagName": "Enumeration",
+      "problemsSolved": 28
+     },
+     {
+      "tagName": "Sorting",
+      "problemsSolved": 25
+     },
+     {
+      "tagName": "Stack",
+      "problemsSolved": 22
+     },
+     {
+      "tagName": "Queue",
+      "problemsSolved": 19
+     },
+     {
+      "tagName": "Linked List",
+      "problemsSolved": 16
+     },
+     {
+      "tagName": "Two Pointers",
+      "problemsSolved": 13
+     }
+    ]
+   }
+  }
+ }
+}

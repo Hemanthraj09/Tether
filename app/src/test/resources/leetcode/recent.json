@@ -1,0 +1,36 @@
+{
+ "data": {
+  "recentAcSubmissionList": [
+   {
+    "id": "1000",
+    "title": "Minimum Swaps to Move Zeros to End",
+    "titleSlug": "minimum-swaps-to-move-zeros-to-end",
+    "timestamp": "1790000000"
+   },
+   {
+    "id": "1001",
+    "title": "Longest Valid Parentheses",
+    "titleSlug": "longest-valid-parentheses",
+    "timestamp": "1789996400"
+   },
+   {
+    "id": "1002",
+    "title": "Concatenate Non-Zero Digits and Multiply by Sum I",
+    "titleSlug": "concatenate-non-zero-digits-and-multiply-by-sum-i",
+    "timestamp": "1789992800"
+   },
+   {
+    "id": "1003",
+    "title": "Generate Parentheses",
+    "titleSlug": "generate-parentheses",
+    "timestamp": "1789989200"
+   },
+   {
+    "id": "2000",
+    "title": "Minimum Swaps to Move Zeros to End",
+    "titleSlug": "minimum-swaps-to-move-zeros-to-end",
+    "timestamp": "1789913600"
+   }
+  ]
+ }
+}
