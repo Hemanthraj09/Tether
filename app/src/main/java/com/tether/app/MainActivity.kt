@@ -10,7 +10,10 @@ import androidx.core.view.WindowInsetsControllerCompat
 import androidx.navigation.NavController
 import androidx.navigation.NavOptions
 import androidx.navigation.fragment.NavHostFragment
+import com.tether.app.data.leetcode.LeetCodeConfig
+import com.tether.app.data.leetcode.LeetCodeSyncState
 import com.tether.app.data.repository.AuthRepository
+import com.tether.app.sync.LeetCodeSyncWorker
 import com.tether.app.databinding.ActivityMainBinding
 import com.tether.app.timer.TetherTimerService
 import com.tether.app.utils.RealtimeWatcher
@@ -20,6 +23,7 @@ class MainActivity : AppCompatActivity() {
     private lateinit var binding: ActivityMainBinding
     private lateinit var navController: NavController
     private var watcherAcquired = false
+    private var signedInServicesStarted = false
 
     private val requestPermissionsLauncher = registerForActivityResult(
         androidx.activity.result.contract.ActivityResultContracts.RequestMultiplePermissions()
@@ -55,6 +59,8 @@ class MainActivity : AppCompatActivity() {
         watcherAcquired = true
         TetherTimerService.restoreIfNeeded(this)
         requestAppPermissions()
+
+        if (savedInstanceState == null) startSignedInServices()
 
         if (savedInstanceState == null) {
             handleNavigateIntent(intent)
@@ -143,7 +149,18 @@ class MainActivity : AppCompatActivity() {
             // Keep the highlighted tab in sync (e.g. after pressing back).
             // Setting isChecked does not trigger the selection listener.
             if (tabItem != null) binding.bottomNav.menu.findItem(tabItem)?.isChecked = true
+            // Covers logging in during this session.
+            if (destination.id == R.id.groupListFragment) startSignedInServices()
         }
+    }
+
+    /** Remote Config + LeetCode background sync, once per activity, only when signed in. */
+    private fun startSignedInServices() {
+        if (signedInServicesStarted || !AuthRepository().isLoggedIn) return
+        signedInServicesStarted = true
+        LeetCodeConfig.init()
+        LeetCodeSyncWorker.schedulePeriodic(this)
+        LeetCodeSyncWorker.syncNow(this)
     }
 
     /**
@@ -168,6 +185,8 @@ class MainActivity : AppCompatActivity() {
 
     /** Signs out and restarts the activity with a clean back stack. */
     fun logout() {
+        LeetCodeSyncWorker.cancelAll(this)
+        LeetCodeSyncState.reset(this)
         AuthRepository().logout()
         startActivity(
             Intent(this, MainActivity::class.java)

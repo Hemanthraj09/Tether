@@ -15,8 +15,8 @@ android {
         applicationId = "com.tether.app"
         minSdk = 26
         targetSdk = 36
-        versionCode = 2
-        versionName = "1.1.0"
+        versionCode = 3
+        versionName = "1.2.0"
 
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
         // Crash reports only from release builds (see AndroidManifest meta-data).
@@ -81,6 +81,8 @@ dependencies {
     implementation("androidx.cardview:cardview:1.0.0")
 
     testImplementation(libs.junit)
+    // Android's org.json is a stub in JVM unit tests; use the real implementation there.
+    testImplementation("org.json:json:20260814")
     androidTestImplementation(libs.androidx.junit)
     androidTestImplementation(libs.androidx.espresso.core)
 
@@ -89,6 +91,11 @@ dependencies {
     implementation("com.google.firebase:firebase-auth-ktx")
     implementation("com.google.firebase:firebase-firestore-ktx")
     implementation("com.google.firebase:firebase-crashlytics")
+    // LeetCode query hot-fixes + kill switch without shipping a new APK (free on Spark)
+    implementation("com.google.firebase:firebase-config")
+
+    // Background LeetCode sync
+    implementation("androidx.work:work-runtime-ktx:2.11.2")
     implementation("org.jetbrains.kotlinx:kotlinx-coroutines-play-services:1.7.3")
     implementation("com.google.android.gms:play-services-auth:21.2.0")
 
