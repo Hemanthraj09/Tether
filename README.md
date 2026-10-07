@@ -46,8 +46,14 @@ Tap anyone's avatar on the leaderboard or group screen to nudge them — they ge
 ### 📈 Pace Indicator
 If you're behind yesterday's pace, a chip appears on the leaderboard card. Disappears the moment you catch up.
 
+### 🔗 Connected Accounts
+Progress you don't have to log by hand. Connect your LeetCode username and problems you solve on **any device** sync automatically in the background (WorkManager, every few hours and on app open). Only public profile data is read. LeetCode is the first source; integrations are tied to a group's goal, so gym or study groups never see coding features.
+
+### 🏁 Tracks
+Structured challenges a group works through together. Coding groups can race through **NeetCode 150**, **Striver's A2Z** or **Rising Brain's** pattern sheet: synced LeetCode solves tick items off with a verified ✓, everyone's progress shows on the group screen, and each item shows which friends have finished it.
+
 ### 🔔 Activity Feed
-Today's Activity feed on the home screen collects your groups' logs and joins in real time. Unread dot on the bell icon when there's something new.
+Today's Activity feed on the home screen collects your groups' logs, joins and verified solves in real time. Unread dot on the bell icon when there's something new.
 
 ---
 
@@ -83,6 +89,7 @@ A detailed write-up of every feature, design decision and trade-off is in **[doc
 | Crash reporting | Firebase Crashlytics (release builds) |
 | Testing | JUnit (domain logic), Firestore emulator + `@firebase/rules-unit-testing` (security rules) |
 | CI/CD | GitHub Actions — tests, lint, rules tests; signed APK on `v*` tags |
+| Integrations | LeetCode public GraphQL API (on-device), WorkManager sync, Firebase Remote Config (query hot-fixes + kill switch) |
 | Release | R8 minify + resource shrinking, baseline profiles via ProfileInstaller |
 | Min SDK | 26 (Android 8.0) |
 
@@ -90,18 +97,20 @@ A detailed write-up of every feature, design decision and trade-off is in **[doc
 
 ## Engineering
 
-**Testing** — 42 unit tests cover the logic that decides what users see: streak rules (month/year/leap boundaries), leaderboard ranking and pace, the timer state machine (Pomodoro catch-up after sleep, breaks, reboot recovery), date keys and the heatmap grid.
+**Testing** — 64 unit tests cover the logic that decides what users see: streak rules (month/year/leap boundaries), leaderboard ranking and pace, the timer state machine (Pomodoro catch-up after sleep, breaks, reboot recovery), date keys, the heatmap grid, LeetCode response parsing (recorded fixtures), solve merging, sync backoff and track progress.
 
 ```bash
 ./gradlew testDebugUnitTest
 ```
 
-**Security rules** — [`firestore.rules`](firestore.rules) only lets users write data about themselves, requires group membership for group writes, caps the 6-member limit server-side, and only allows leaderboard counters to increase by ≤ 24h per write. 38 emulator tests replay every write the app makes plus abuse cases.
+**Security rules** — [`firestore.rules`](firestore.rules) only lets users write data about themselves, requires group membership for group writes, caps the 6-member limit server-side, and only allows leaderboard counters to increase by ≤ 24h per write. 53 emulator tests replay every write the app makes plus abuse cases.
 
 ```bash
 cd firestore-tests && npm install && npm test   # needs Java 11+ for the emulator
 firebase deploy --only firestore:rules          # deploy after the tests pass
 ```
+
+**Designed for an unofficial API** — LeetCode has no public API contract, so the integration assumes it can break: queries can be hot-fixed through Remote Config without an app release, sync backs off exponentially, parse failures degrade gracefully, and a daily GitHub Actions canary checks LeetCode's schema against the app's exact queries.
 
 **CI** — every push runs unit tests, lint, a debug build and the rules tests. Pushing a tag like `v1.1.0` builds a signed release APK and attaches it to a GitHub Release as `Tether.apk`.
 
@@ -150,6 +159,12 @@ groupStats/{gid}
   → weekly/{weekKey}/{uid}: hours
   → streaks/{uid}: currentStreak, longestStreak, lastLogDate
   → nudges/{date}_{fromUid}_{toUid}: nudgerUid, nudgerName, nudgedUid, date, timestamp
+
+users/{uid}/completions/{key}
+  → title, slug, source ("leetcode" | "self"), completedAt, syncedAt
+
+leetcodeUsernames/{handle}
+  → uid, username   (one Tether account per LeetCode handle)
 ```
 
 ---

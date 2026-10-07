@@ -1,7 +1,7 @@
 # Tether: Implementation Guide
 
 > What has been built so far, how it works, and why it was built that way.
-> Current version: **1.1.0** (versionCode 2) · Last updated: **4 Oct 2026**
+> Current version: **1.2.0** (versionCode 3) · Last updated: **4 Oct 2026**
 
 ---
 
@@ -29,14 +29,16 @@
 
 ## 1. Overview
 
-Tether is a native Android social-accountability app for small friend groups (up to 6 people), aimed at Indian college students. Members log study, gym or coding hours, keep per-group streaks, compete on a leaderboard that resets every day, nudge friends who've gone quiet, and run focus sessions with a built-in timer.
+Tether is a native Android social-accountability app for small friend groups (up to 6 people), aimed at college students. A group picks a goal (study, gym, coding or anything else); members log progress, keep per-group streaks, compete on a leaderboard that resets every day, nudge friends who've gone quiet, and run focus sessions with a built-in timer.
+
+Since v1.2, progress can also be **verified from connected accounts** instead of only self-reported. LeetCode is the first source: solves sync automatically and tick off items in **Tracks**, structured challenges a group works through together. Integrations are scoped to the group's goal, so a Gym or Study group never sees coding features.
 
 | | |
 |---|---|
 | Platform | Android 8.0+ (minSdk 26, targetSdk 36) |
-| Codebase | ~5,100 lines of Kotlin, 51 source files, 21 layouts |
-| Backend | Firebase (Firestore, Auth, Crashlytics); no custom server yet |
-| Tests | 42 JVM unit tests + 38 Firestore security-rule tests |
+| Codebase | ~6,800 lines of Kotlin, 70 source files, 25 layouts |
+| Backend | Firebase Spark plan (Firestore, Auth, Crashlytics, Remote Config); no custom server |
+| Tests | 64 JVM unit tests + 53 Firestore security-rule tests + a daily LeetCode API canary |
 | Distribution | Sideloaded APK from GitHub Releases |
 
 ---
@@ -51,7 +53,8 @@ Tether is a native Android social-accountability app for small friend groups (up
 | Architecture | MVVM + Repository + a pure domain layer |
 | Async | Coroutines, `Flow`/`StateFlow`, `callbackFlow` wrappers over Firestore listeners |
 | Backend | Cloud Firestore (asia-south1), Firebase Auth (email/password + Google) |
-| Background work | Foreground service (`specialUse`) for the timer; app-scoped coroutine watcher for events |
+| Background work | Foreground service (`specialUse`) for the timer; WorkManager for LeetCode sync; app-scoped coroutine watcher for events |
+| Integrations | LeetCode public GraphQL API (on-device, `HttpURLConnection` + `org.json`), Firebase Remote Config for query hot-fixes and a kill switch |
 | Crash reporting | Firebase Crashlytics (release builds only; R8 mapping uploaded at build time) |
 | Build | Gradle 9.3 (Kotlin DSL), AGP 9.1, R8 full shrinking, ProfileInstaller baseline profiles |
 | Testing | JUnit 4; Firestore emulator + `@firebase/rules-unit-testing` + `node:test` |
@@ -122,8 +125,13 @@ com.tether.app
 │   ├── FirestoreFlows.kt   DocumentReference/Query → Flow (cache-first, error-tolerant)
 │   ├── UserCache.kt        in-memory display name of the signed-in user
 │   ├── model/              Group, Log, User (Firestore-mapped data classes)
-│   └── repository/         Auth, Group, GroupManagement, Log, Leaderboard, Nudge
-├── domain/                 StreakCalculator, LeaderboardBuilder, InviteCodes
+│   ├── leetcode/           API client, response parser, Remote Config, sync state
+│   ├── tracks/             Track model/parser + repository (bundled JSON assets)
+│   └── repository/         Auth, Group, GroupManagement, Log, Leaderboard, Nudge,
+│                           LeetCode, Completion, Race
+├── domain/                 StreakCalculator, LeaderboardBuilder, InviteCodes,
+│                           SolveMerger, SyncBackoff, TrackProgress, LeetCodeUsernames
+├── sync/                   LeetCodeSyncWorker (WorkManager)
 ├── timer/                  TimerEngine (pure), TetherTimerService, mode/control/note dialogs
 ├── ui/
 │   ├── auth/               login, signup, Google sign-in, password reset
@@ -131,7 +139,8 @@ com.tether.app
 │   ├── home/               group list, group screen ("feed"), notifications sheet
 │   ├── leaderboard/        leaderboard tab, shared ranked-list adapter
 │   ├── log/                manual log bottom sheet
-│   └── profile/            profile, HeatmapView + HeatmapGrid, About, FAQ
+│   ├── profile/            profile, connected accounts, HeatmapView + HeatmapGrid, About, FAQ
+│   └── tracks/             track screen (personal + group race), race standings
 └── utils/                  DateKeys, Formatters, RealtimeWatcher, NotificationStore,
                             TetherToast, navigation/dialog guards
 ```
@@ -142,11 +151,15 @@ com.tether.app
 
 ```
 users/{uid}
-  uid, name, email, groupIds[], totalHours
+  uid, name, email, groupIds[], totalHours, leetcodeUsername?
+  completions/{key}             key, title, slug?, source ("leetcode" | "self"),
+                                completedAt, syncedAt, userName
+
+leetcodeUsernames/{lowercase}   uid, username   ← one Tether account per LeetCode handle
 
 groups/{groupId}
   id, name, goalType, members[] (max 6), inviteCode ("" for solo),
-  createdBy, solo, createdAt
+  createdBy, solo, createdAt, trackId ("" = no race)
 
 logs/{logId}
   id, userId, groupId, userName, userInitials, avatarColorHex,
@@ -174,6 +187,11 @@ groupStats/{groupId}/
 | `logs where groupId == G and date == today` | activity watcher |
 | `groupStats/G/nudges where date == today` | "already nudged" state |
 | `groupStats/G/nudges where nudgedUid == me and date == today` | incoming nudges |
+| `users/U/completions` | track progress, group races |
+| `users/U/completions where syncedAt > appStart` | friends' new solves in the activity feed |
+| `users/me/completions where documentId in [recent slugs]` | sync: which recent solves are new |
+
+**Bundled data (assets):** `tracks/*.json` (NeetCode 150, Striver's A2Z, Rising Brain) and `leetcode/queries.json` (the GraphQL queries, shared with the CI canary).
 
 ---
 
@@ -256,6 +274,50 @@ groupStats/{groupId}/
 - A **single query** (`logs where userId == me`) drives both the heatmap and today's hours.
 - **`HeatmapView`** is a custom `View` drawing the full calendar year on a `Canvas`: Monday-first columns, month labels, a 13-level green scale (one level per hour; 12h or more is brightest). It replaces a `TableLayout` of about 420 child views. The layout maths lives in the pure `HeatmapGrid`. It opens scrolled to the current week.
 - About (app description and builder card with GitHub/LinkedIn links) and FAQ (8 expandable questions).
+
+### 5.11 Connected accounts: LeetCode
+**Why:** hours are self-reported and easy to game. A connected account turns claims into verified progress. Integrations are scoped by goal, so coding is one module, not the app's identity.
+
+- **Connect:** Profile → Connected accounts → enter a handle, `@handle` or profile URL (`LeetCodeUsernames.normalize`). The handle is checked against LeetCode, then **claimed** at `leetcodeUsernames/{lowercase}` and saved on the user in one batch, so two Tether accounts can't connect the same profile.
+- **What's read:** only public data, through LeetCode's GraphQL endpoint (the API leetcode.com itself uses). Profile stats (solved by difficulty, streak, active days, topic counts) and the most recent 20 accepted submissions.
+- **Where solving happens doesn't matter:** LeetCode's servers hold the result, and the phone reads it. Solving on a laptop needs no logging at all.
+- **Sync** (`LeetCodeRepository.sync`, run by `LeetCodeSyncWorker`): every 3 h on any network (WorkManager, survives reboots), plus on app open, on connect and on "Sync now". It fetches recent solves, looks up which slugs already exist (one `whereIn` query) and lets `SolveMerger` decide the writes:
+  - new solves become verified completions;
+  - a self-ticked item seen on LeetCode is upgraded to verified, keeping the earlier date;
+  - repeat solves count once.
+  Writes are one batch.
+- **Designed for an unofficial API:**
+  - Requests come from users' phones, low volume, so there's no server IP to get blocked.
+  - Queries live in `assets/leetcode/queries.json` and can be replaced remotely via Remote Config (`leetcode_profile_query`, `leetcode_recent_query`). A renamed field is fixed by aliasing it back, with no APK release.
+  - Remote kill switch: `leetcode_sync_enabled`.
+  - Exponential backoff (`SyncBackoff`: 15 min doubling to a 24 h cap), persisted in `LeetCodeSyncState`. The app shows "Sync paused: …" and everything else keeps working.
+  - Parser failures become `LeetCodeSchemaException` instead of crashes.
+  - A daily GitHub Actions canary validates the app's exact queries against LeetCode's schema (section 11).
+- **Trust:** friends' LeetCode totals on race cards are fetched **directly from LeetCode** by each viewer (10-minute cache), not read from Firestore. Editing the database can't inflate them.
+- **Profile card:** handle, solved by difficulty, LeetCode streak, strongest topics, last sync / paused state. Manage menu: Sync now, open profile, disconnect.
+
+*Files:* `data/leetcode/*`, `LeetCodeRepository`, `LeetCodeSyncWorker`, `ConnectedAccountsViewModel`, `ProfileFragment`
+
+### 5.12 Tracks and group races
+- **Tracks** are structured challenges, bundled as JSON and tagged with a goal and a verifier. The first three are for Coding groups:
+
+| Track | Items | Auto-verifiable (LeetCode) | Structure |
+|---|---|---|---|
+| NeetCode 150 | 150 | 150 | 18 patterns (roadmap order) |
+| Striver's A2Z | 448 | 288 | 20 steps |
+| Rising Brain (Pattern Wise) | 385 | 317 | 17 topics, with patterns |
+
+  The data was extracted from each sheet's official site. Items not on LeetCode (GeeksforGeeks or takeuforward problems) are ticked by hand. LeetCode items are keyed by slug, so synced solves tick them off automatically.
+- **Completions:** `users/{uid}/completions/{key}`, either verified ("leetcode", green ✓) or manual ("self", orange ring, can be unticked). Verified items can't be unticked.
+- **Track screen** (`TrackFragment`):
+  - sections with done/total counts, difficulty chips, and links to the problem;
+  - a "Hide completed" filter;
+  - in race mode, up to 6 member avatars on each item showing who finished it, plus live standings at the top.
+- **Group race:** only in groups whose goal has tracks (`TrackRepository.goalHasTracks`). The creator picks, changes or ends the track (card button, long-press, or ⋮ → Change track; enforced by the security rules). The card shows each member's progress bar plus their live LeetCode total, and opens the full race.
+- **Activity feed:** friends' newly synced verified solves appear in the bell ("Asha solved LRU Cache ✓").
+- **Progress maths** (`TrackProgress`) is pure and unit-tested: per-section counts, overall done, race ranking with stable ties.
+
+*Files:* `data/tracks/*`, `CompletionRepository`, `RaceRepository`, `ui/tracks/*`, `GroupFeedViewModel` (race state)
 
 ---
 
@@ -352,10 +414,13 @@ Snapshot listeners deliver **cached data first, then server data**, so every scr
 | `groupStats/{g}/daily`, `weekly` | signed-in users | members only; only **your own** counter; can only **increase** by ≤ 24 per write |
 | `groupStats/{g}/streaks/{uid}` | signed-in users | members, own document, fixed keys |
 | `groupStats/{g}/nudges/{id}` | signed-in users | members; must be from you, to another member; id must equal `date_from_to` |
+| `users/{uid}/completions/{key}` | signed-in users (races) | owner only; fixed fields; `key` must match the doc id; source ∈ {leetcode, self} |
+| `leetcodeUsernames/{handle}` | signed-in users | create only for yourself, doc id = lowercase handle; never updated; only the owner can delete (disconnect) |
+| `groups/{id}.trackId` | n/a | only the creator, and only that field; new groups start with no track |
 | legacy `nudges/**` | signed-in users | signed-in users (old app versions only; remove later) |
 | anything else | denied | denied |
 
-Rules are tested against the emulator: 38 cases replaying the app's real batches and transactions plus abuse cases (other people's hours, kicking members, joining full or solo groups, 30-hour logs, spoofed nudges, …). The rules have to be deployed manually (`firebase deploy --only firestore:rules`) after the tests pass.
+Rules are tested against the emulator: 53 cases replaying the app's real batches and transactions plus abuse cases (other people's hours, kicking members, joining full or solo groups, 30-hour logs, spoofed nudges, claiming someone else's LeetCode handle, writing another user's completions, members changing the track, …). The rules have to be deployed manually (`firebase deploy --only firestore:rules`) after the tests pass.
 
 ---
 
@@ -371,8 +436,11 @@ Rules are tested against the emulator: 38 cases replaying the app's real batches
 | `HeatmapGridTest` | 5 | intensity levels, Monday-first grid size, cell placement, month labels, today marker |
 | `DateKeysAndFormattersTest` | 7 | previous day across boundaries, week-year keys, ASCII date keys, hour formatting, initials, avatar colours |
 | `InviteCodesTest` | 2 | normalization, generation format |
+| `LeetCodeParserTest` | 7 | profile stats and topics, recent solves, unknown user, schema change, malformed/HTML responses, null lists (recorded, anonymised fixtures) |
+| `CompletionsTest` | 9 | solve merging (new, already verified, self→verified upgrade, repeat solves), backoff schedule, username normalisation |
+| `TrackTest` | 6 | track parsing, bundled track sizes and key validity, section/overall progress, race ranking, goal gating |
 
-**Rules tests** (`firestore-tests/rules.test.js`): 38 tests across users, groups, logging, reading, nudges and default-deny.
+**Rules tests** (`firestore-tests/rules.test.js`): 53 tests across users, groups, logging, reading, nudges, LeetCode handles, completions, group tracks and default-deny.
 
 ```bash
 ./gradlew testDebugUnitTest                       # unit tests
@@ -382,6 +450,8 @@ cd firestore-tests && npm install && npm test     # rules (needs Java 11+)
 ---
 
 ## 11. CI/CD and releases
+
+`.github/workflows/leetcode-canary.yml` runs every day at 09:00 IST (and whenever the queries change). It sends the app's exact queries from `queries.json` to LeetCode using a username that can't exist. GraphQL validates every field before executing, so this proves the schema still matches without reading anyone's data. A failure emails the repo owner: patch the query via Remote Config.
 
 `.github/workflows/ci.yml` has three jobs:
 
@@ -399,7 +469,7 @@ cd firestore-tests && npm install && npm test     # rules (needs Java 11+)
 | `TETHER_KEY_ALIAS` | `androiddebugkey` for a debug keystore |
 | `TETHER_KEY_PASSWORD` | `android` for a debug keystore |
 
-**Cutting a release:** bump `versionCode`/`versionName` in `app/build.gradle.kts`, commit, then `git tag v1.1.0 && git push origin v1.1.0`.
+**Cutting a release:** bump `versionCode`/`versionName` in `app/build.gradle.kts`, commit, then `git tag v1.2.0 && git push origin v1.2.0`.
 
 Crashlytics is enabled only in release builds (manifest placeholder). The plugin uploads the R8 mapping file during `assembleRelease`, so crash stack traces are readable.
 
@@ -438,12 +508,19 @@ Google Sign-In requires the SHA-1 of the signing key to be registered in Firebas
 | Custom `Canvas` heatmap | One view instead of ~420; smooth scrolling | Custom drawing code (tested via `HeatmapGrid`) |
 | Release signed with the registered debug key | Google Sign-In keeps working for sideloaded installs without new Firebase setup | Must switch to a dedicated upload key before publishing on Play |
 | Logs readable by any signed-in user | The profile heatmap must include logs from groups you've left | Notes are visible to signed-in users who know a group id |
+| LeetCode via its public GraphQL API, called on-device | Same API as leetcode.com; no server to block; free | Unofficial: mitigated by remote query patches, a kill switch, backoff and a daily canary |
+| Username-only connect (no ownership proof) | Zero friction, which matters for adoption | Someone could connect a handle that isn't theirs; uniqueness claims and the friend-group context limit this. An optional bio-code verification is planned |
+| Friends' totals read live from LeetCode | Can't be faked by writing to Firestore | One small request per member per 10 minutes |
+| Tracks bundled as assets | Instant, offline, versioned with the app | New tracks need an app update (could move to Firestore/Remote Config later) |
+| Integrations scoped by group goal | Coding is a module, not the product's identity; non-coding groups stay clean | Each new goal needs its own source (e.g. Health Connect for gym) |
 
 ---
 
 ## 14. Known limitations
 
-- **Nudges and activity events** only arrive while the app process is alive. True push to a closed app needs Cloud Functions + FCM (Blaze plan).
+- **Nudges and activity events** only arrive while the app process is alive. True push to a closed app needs Cloud Functions + FCM (Blaze plan); the project deliberately stays on the free Spark plan.
+- **LeetCode's public list holds only the last 20 solves.** Syncing every few hours and on app open covers normal use, but solves from before connecting have to be ticked by hand.
+- **LeetCode accounts are connected by username only;** ownership isn't proven yet.
 - **Leaderboard integrity** is enforced by rules (own counter, increase-only, ≤ 24h per write), but a determined user could still log fake manual hours. Verified sessions are planned.
 - **Email addresses** are readable by signed-in users (they live on the user document). They could move to a private subcollection.
 - **No log editing yet:** a mistaken log can be deleted only by direct Firestore access. The rules already allow deleting your own log.
@@ -456,11 +533,15 @@ Google Sign-In requires the SHA-1 of the signing key to be registered in Firebas
 
 Planned "lovable product" features, chosen for both student appeal and engineering depth:
 
-1. **Study Together:** live presence ("🟢 Rahul, 1h 12m into DSA") and one-tap shared sessions. Realtime Database presence with `onDisconnect`, heartbeats, stale-session cleanup.
-2. **Verified Focus:** timer sessions get a ✓ and a focus score (phone pickups, time in other apps); verified and manual hours are shown separately. Ideally the server computes the aggregates from raw sessions (Cloud Functions), which closes the integrity gap above.
-3. **Tether Wrapped:** weekly/semester recap card with personas (Night Owl, Weekend Warrior), week-over-week growth and a Perfect Week badge, shareable to stories. A scheduled job pre-computes summaries (O(1) reads per user).
-4. **Quality of life:** edit/delete a log, daily streak reminder, streak freeze, home-screen widget, in-app update prompt.
-5. **Engineering:** Hilt DI, a Firebase BoM 34 upgrade, a dedicated release keystore, Play Store listing.
+All planned work fits the free Spark plan (no Cloud Functions).
+
+1. **Group stakes:** a weekly shared target. If everyone hits their part, the group's flame grows; if one person misses, it breaks for everyone. Cooperative pressure instead of a leaderboard that the bottom half gives up on.
+2. **Study Together:** live presence ("🟢 Rahul, 1h 12m into DSA") and one-tap shared sessions. Realtime Database presence with `onDisconnect`, heartbeats, stale-session cleanup (needs a Realtime Database instance).
+3. **More connected sources:** Health Connect for gym goals, GitHub or Codeforces for coding, optional LeetCode ownership verification (bio code), and a Chrome extension for instant sync on "Accepted".
+4. **Verified Focus:** timer sessions get a ✓ and an on-device focus score (phone pickups, time in other apps); verified and manual hours shown separately.
+5. **Tether Wrapped:** weekly/semester recap card with personas (Night Owl, Weekend Warrior), week-over-week growth and a Perfect Week badge, computed on the device and shareable to stories.
+6. **Quality of life:** edit/delete a log, daily streak reminder, streak freeze, home-screen widget, in-app update prompt.
+7. **Engineering:** Hilt DI, a Firebase BoM 34 upgrade, a dedicated release keystore, Play Store listing.
 
 ---
 
@@ -475,6 +556,7 @@ Planned "lovable product" features, chosen for both student appeal and engineeri
 | 11 May 2026 | Leaderboard streak staleness fix |
 | 4 Oct 2026 | **v1.1.0:** performance and reliability overhaul (sections 7–8), nudge redesign, timer engine, leaderboard group picker, password reset, R8 release build |
 | 4 Oct 2026 | Engineering foundation: domain layer + 42 unit tests, security rules + 38 emulator tests, Crashlytics, GitHub Actions CI/CD, this document |
+| 4 Oct 2026 | **v1.2.0:** connected accounts (LeetCode sync with WorkManager, Remote Config hot-fixes, backoff, daily canary), Tracks (NeetCode 150, Striver's A2Z, Rising Brain) with group races, verified-solve activity feed; 64 unit + 53 rules tests |
 
 ---
 
@@ -485,4 +567,7 @@ Planned "lovable product" features, chosen for both student appeal and engineeri
 - **Correct time-keeping:** "The timer is a pure state machine over monotonic timestamps. It's exact through device sleep, catches up across multiple Pomodoro cycles, survives process death through persisted state, and handles reboots by re-basing the clock. All of it is unit-tested."
 - **Security:** "The security rules mirror the app's access paths: users can only increase their own counters by at most 24 hours per write, and only in groups they belong to. Emulator tests replay the app's real batches plus abuse cases."
 - **Performance:** "I profiled the slowness down to sequential server round trips and view-heavy rendering, moved to cache-first listeners, atomic local-first writes, DiffUtil and a Canvas-drawn heatmap, and enabled R8 plus baseline profiles. The APK shrank from 14.8 to 6.7 MB."
+- **Unreliable third-party APIs:** "LeetCode has no official API, so I designed for failure. Queries can be patched remotely without an app release, there's a remote kill switch, sync backs off exponentially, parser errors degrade gracefully, and a daily CI canary checks the schema before users notice. Requests come from users' own phones, so there's no server IP to get blocked."
+- **Trust without a server:** "Friends' totals are read straight from LeetCode by each viewer, so nobody can inflate them by writing to the database; Firestore is only a cache. Handles are claimed atomically, so one LeetCode profile maps to one account."
+- **Product thinking:** "Integrations are scoped to a group's goal: coding groups get LeetCode and tracks, while a gym group never sees them. It's an accountability app with verified sources, not a placement-prep app."
 - **Engineering hygiene:** "Business rules sit in a framework-free domain layer with unit tests; CI runs tests, lint and rules tests on every push and ships a signed APK on tags; Crashlytics with uploaded R8 mappings gives readable production crashes."
