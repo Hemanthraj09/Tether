@@ -61,10 +61,38 @@ service cloud.firestore {
               'currentStreak', 'longestStreak', 'lastLogDate']);
 
       allow update: if signedIn() && me() == userId
-        && changedKeys().hasOnly(['uid', 'name', 'email', 'groupIds', 'totalHours'])
-        && (!('totalHours' in request.resource.data) || request.resource.data.totalHours is number);
+        && changedKeys().hasOnly(['uid', 'name', 'email', 'groupIds', 'totalHours', 'leetcodeUsername'])
+        && (!('totalHours' in request.resource.data) || request.resource.data.totalHours is number)
+        && (!('leetcodeUsername' in request.resource.data) || request.resource.data.leetcodeUsername is string);
 
       allow delete: if false;
+
+      // Completed track items: synced from LeetCode ("leetcode") or ticked by hand ("self").
+      // Readable by signed-in users (group races); only the owner writes.
+      match /completions/{key} {
+        allow read: if signedIn();
+        allow create, update: if signedIn() && me() == userId
+          && request.resource.data.keys().hasOnly(
+               ['key', 'title', 'slug', 'source', 'completedAt', 'syncedAt', 'userName'])
+          && request.resource.data.key == key
+          && request.resource.data.source in ['leetcode', 'self']
+          && request.resource.data.completedAt is number
+          && request.resource.data.syncedAt is number;
+        allow delete: if signedIn() && me() == userId;
+      }
+    }
+
+    // ── leetcodeUsernames/{lowercaseHandle} ────────────────────
+    // One Tether account per LeetCode handle. Claims can't be edited, only released.
+    match /leetcodeUsernames/{handle} {
+      allow read: if signedIn();
+      allow create: if signedIn()
+        && request.resource.data.keys().hasOnly(['uid', 'username'])
+        && request.resource.data.uid == me()
+        && request.resource.data.username is string
+        && request.resource.data.username.lower() == handle;
+      allow update: if false;
+      allow delete: if signedIn() && resource.data.uid == me();
     }
 
     // ── groups/{groupId} ───────────────────────────────────────
@@ -75,15 +103,21 @@ service cloud.firestore {
       allow create: if signedIn()
         && request.resource.data.id == groupId
         && request.resource.data.createdBy == me()
+        && request.resource.data.get('trackId', '') == ''
         && request.resource.data.members == [me()]
         && request.resource.data.name is string
         && request.resource.data.name.size() > 0
         && request.resource.data.name.size() <= 60;
 
-      // The only edits the app makes: someone adds or removes *themselves*.
-      allow update: if signedIn()
-        && changedKeys().hasOnly(['members'])
-        && (isJoining() || isLeaving());
+      // Edits the app makes: someone adds or removes *themselves*,
+      // or the creator picks the group's track.
+      allow update: if signedIn() && (
+        (changedKeys().hasOnly(['members']) && (isJoining() || isLeaving()))
+        || (changedKeys().hasOnly(['trackId'])
+            && resource.data.createdBy == me()
+            && request.resource.data.trackId is string
+            && request.resource.data.trackId.size() <= 40)
+      );
 
       allow delete: if signedIn() && resource.data.createdBy == me();
 

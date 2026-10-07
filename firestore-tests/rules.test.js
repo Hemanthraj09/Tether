@@ -16,7 +16,7 @@ const {
 } = require('@firebase/rules-unit-testing');
 const {
   doc, setDoc, getDoc, getDocs, updateDoc, deleteDoc, collection, query, where,
-  writeBatch, runTransaction, increment, arrayUnion, arrayRemove,
+  writeBatch, runTransaction, increment, arrayUnion, arrayRemove, deleteField,
 } = require('firebase/firestore');
 
 const TODAY = '2026-05-10';
@@ -297,6 +297,103 @@ describe('nudges', () => {
 
   test('legacy: old app versions can still write the old nudge path', async () => {
     await assertSucceeds(setDoc(doc(as('bob'), 'nudges', 'g1', TODAY, 'bob_alice'), { nudgedUid: 'alice' }));
+  });
+});
+
+describe('connected accounts: LeetCode', () => {
+  // Mirrors LeetCodeRepository.link(): claim the handle + save it on the user, atomically.
+  const link = (db, uid, username) => {
+    const b = writeBatch(db);
+    b.set(doc(db, 'leetcodeUsernames', username.toLowerCase()), { uid, username });
+    b.update(doc(db, 'users', uid), { leetcodeUsername: username });
+    return b.commit();
+  };
+
+  test('app: connect a LeetCode handle', async () => {
+    await assertSucceeds(link(as('bob'), 'bob', 'Bob_Codes'));
+  });
+
+  test('blocks: claiming a handle someone else already connected', async () => {
+    await link(as('alice'), 'alice', 'TopCoder');
+    await assertFails(link(as('bob'), 'bob', 'TopCoder'));
+  });
+
+  test('blocks: claiming a handle in someone else\'s name', async () => {
+    await assertFails(setDoc(doc(as('bob'), 'leetcodeUsernames', 'someone'), { uid: 'alice', username: 'someone' }));
+  });
+
+  test('blocks: claim id that is not the lowercase handle', async () => {
+    await assertFails(setDoc(doc(as('bob'), 'leetcodeUsernames', 'other'), { uid: 'bob', username: 'Bob_Codes' }));
+  });
+
+  test('app: disconnect releases the handle', async () => {
+    await link(as('bob'), 'bob', 'Bob_Codes');
+    const db = as('bob');
+    const b = writeBatch(db);
+    b.update(doc(db, 'users', 'bob'), { leetcodeUsername: deleteField() });
+    b.delete(doc(db, 'leetcodeUsernames', 'bob_codes'));
+    await assertSucceeds(b.commit());
+  });
+
+  test('blocks: releasing someone else\'s handle', async () => {
+    await link(as('alice'), 'alice', 'TopCoder');
+    await assertFails(deleteDoc(doc(as('bob'), 'leetcodeUsernames', 'topcoder')));
+  });
+});
+
+describe('track completions', () => {
+  const completion = (key, source, extra = {}) => ({
+    key, title: 'LRU Cache', slug: key, source, completedAt: 1, syncedAt: 2, userName: 'Bob', ...extra,
+  });
+
+  test('app: LeetCode sync writes verified completions (batch)', async () => {
+    const db = as('bob');
+    const b = writeBatch(db);
+    b.set(doc(db, 'users', 'bob', 'completions', 'lru-cache'), completion('lru-cache', 'leetcode'));
+    b.set(doc(db, 'users', 'bob', 'completions', 'two-sum'), completion('two-sum', 'leetcode'));
+    await assertSucceeds(b.commit());
+  });
+
+  test('app: tick an item by hand, then untick it', async () => {
+    const ref = (db) => doc(db, 'users', 'bob', 'completions', 'a2z:selection-sort');
+    const { slug, ...manual } = completion('a2z:selection-sort', 'self');
+    await assertSucceeds(setDoc(ref(as('bob')), manual));
+    await assertSucceeds(deleteDoc(ref(as('bob'))));
+  });
+
+  test('app: group members can read each other\'s completions (race)', async () => {
+    await setDoc(doc(as('bob'), 'users', 'bob', 'completions', 'lru-cache'), completion('lru-cache', 'leetcode'));
+    await assertSucceeds(getDocs(collection(as('alice'), 'users', 'bob', 'completions')));
+  });
+
+  test('blocks: writing completions for someone else', async () => {
+    await assertFails(setDoc(doc(as('bob'), 'users', 'alice', 'completions', 'lru-cache'), completion('lru-cache', 'leetcode')));
+  });
+
+  test('blocks: unknown sources and mismatched keys', async () => {
+    await assertFails(setDoc(doc(as('bob'), 'users', 'bob', 'completions', 'lru-cache'), completion('lru-cache', 'admin')));
+    await assertFails(setDoc(doc(as('bob'), 'users', 'bob', 'completions', 'lru-cache'), completion('two-sum', 'leetcode')));
+  });
+});
+
+describe('group tracks', () => {
+  test('app: the creator picks a track', async () => {
+    await assertSucceeds(updateDoc(doc(as('alice'), 'groups', 'g1'), { trackId: 'neetcode150' }));
+  });
+
+  test('blocks: a member changing the track', async () => {
+    await assertFails(updateDoc(doc(as('bob'), 'groups', 'g1'), { trackId: 'striver-a2z' }));
+  });
+
+  test('blocks: changing the track together with other fields', async () => {
+    await assertFails(updateDoc(doc(as('alice'), 'groups', 'g1'), { trackId: 'neetcode150', name: 'Renamed' }));
+  });
+
+  test('app: new groups start without a track', async () => {
+    await assertSucceeds(setDoc(doc(as('carol'), 'groups', 'g5'), {
+      id: 'g5', name: 'Coders', goalType: 'Coding', members: ['carol'],
+      inviteCode: 'CODE55', createdBy: 'carol', solo: false, createdAt: 3, trackId: '',
+    }));
   });
 });
 
