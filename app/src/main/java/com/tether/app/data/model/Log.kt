@@ -10,5 +10,9 @@ data class Log(
     val date: String = "",
     val value: Double = 0.0,
     val note: String = "",
-    val createdAt: Long = 0L
+    val createdAt: Long = 0L,
+    /** "manual" (log sheet), "timer" (focus session) or "system" (joined/created). */
+    val source: String = "manual",
+    /** A proof photo exists at groupStats/{groupId}/proofs/{id} (visible for 24 h). */
+    val hasPhoto: Boolean = false
 )

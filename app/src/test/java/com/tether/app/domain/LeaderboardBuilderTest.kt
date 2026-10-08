@@ -1,5 +1,6 @@
 package com.tether.app.domain
 
+import com.tether.app.data.repository.CodingStatsRepository
 import com.tether.app.domain.LeaderboardBuilder.StreakInfo
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
@@ -89,5 +90,42 @@ class LeaderboardBuilderTest {
     fun `pace label is attached to entries`() {
         val entries = build(todayHours = mapOf("a" to 1.0), yesterdayHours = mapOf("a" to 3.0))
         assertEquals("2h 0m behind yesterday", entries.first { it.uid == "a" }.paceLabel)
+    }
+
+    private fun stats(today: Int, week: Int, handle: String? = "h", verified: Boolean? = null, unconfirmed: Int = 0) =
+        CodingStatsRepository.MemberStats(today, week, handle, verified, unconfirmed)
+
+    @Test
+    fun `coding groups ranked by hours keep the hours order and gain solve counts`() {
+        val entries = build(todayHours = mapOf("a" to 3.0, "b" to 1.0, "c" to 2.0))
+        val merged = LeaderboardBuilder.withSolves(entries,
+            mapOf("b" to stats(today = 4, week = 9)), rankBySolves = false)
+        assertEquals(listOf("a", "c", "b"), merged.map { it.uid })
+        assertEquals(4, merged.first { it.uid == "b" }.solvedToday)
+        assertEquals(9, merged.first { it.uid == "b" }.solvedWeek)
+        assertEquals(0, merged.first { it.uid == "a" }.solvedToday) // no stats yet → 0, not hidden
+        assertFalse(merged.any { it.rankedBySolves })
+    }
+
+    @Test
+    fun `ranking by solves orders by problems today, hours break ties`() {
+        val entries = build(todayHours = mapOf("a" to 3.0, "b" to 1.0, "c" to 2.0))
+        val merged = LeaderboardBuilder.withSolves(entries,
+            mapOf("a" to stats(1, 1), "b" to stats(5, 5), "c" to stats(1, 2)), rankBySolves = true)
+        assertEquals(listOf("b", "a", "c"), merged.map { it.uid })
+        assertTrue(merged.all { it.rankedBySolves })
+    }
+
+    @Test
+    fun `leetcode note explains each member's trust state`() {
+        val entries = build()
+        val merged = LeaderboardBuilder.withSolves(entries, mapOf(
+            "a" to stats(0, 0, handle = null),
+            "b" to stats(2, 2, verified = true, unconfirmed = 1),
+            "c" to stats(1, 1, handle = "chitra", verified = false)
+        ), rankBySolves = false).associateBy { it.uid }
+        assertEquals("LeetCode not connected", merged.getValue("a").leetcodeNote)
+        assertEquals("⚠ 1 unconfirmed", merged.getValue("b").leetcodeNote) // contradictions win over ✓
+        assertEquals("@chitra", merged.getValue("c").leetcodeNote)
     }
 }

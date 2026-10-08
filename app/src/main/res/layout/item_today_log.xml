@@ -1,0 +1,120 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- One of today's logs: who, how long, what they did, optional photo, reactions. -->
+<LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
+    xmlns:tools="http://schemas.android.com/tools"
+    android:layout_width="match_parent"
+    android:layout_height="wrap_content"
+    android:layout_marginBottom="8dp"
+    android:background="@drawable/bg_leaderboard_row"
+    android:orientation="horizontal"
+    android:padding="14dp">
+
+    <FrameLayout
+        android:id="@+id/flAvatar"
+        android:layout_width="36dp"
+        android:layout_height="36dp"
+        android:background="@drawable/bg_avatar_circle">
+
+        <TextView
+            android:id="@+id/tvAvatarInitials"
+            android:layout_width="match_parent"
+            android:layout_height="match_parent"
+            android:gravity="center"
+            android:textColor="@color/colorTextPrimary"
+            android:textSize="13sp"
+            android:textStyle="bold"
+            tools:text="AC" />
+    </FrameLayout>
+
+    <LinearLayout
+        android:layout_width="0dp"
+        android:layout_height="wrap_content"
+        android:layout_marginStart="12dp"
+        android:layout_weight="1"
+        android:orientation="vertical">
+
+        <TextView
+            android:id="@+id/tvHeadline"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:textColor="@color/colorTextPrimary"
+            android:textSize="14sp"
+            tools:text="Asha · 1h 30m" />
+
+        <TextView
+            android:id="@+id/tvMeta"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:layout_marginTop="1dp"
+            android:textColor="@color/colorTextSecondary"
+            android:textSize="11sp"
+            tools:text="4:12 pm · ⏱ focus session" />
+
+        <TextView
+            android:id="@+id/tvNote"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:layout_marginTop="6dp"
+            android:textColor="@color/colorTextPrimary"
+            android:textSize="14sp"
+            tools:text="Solved 3 graph problems and revised OS notes" />
+
+        <FrameLayout
+            android:id="@+id/flPhoto"
+            android:layout_width="match_parent"
+            android:layout_height="180dp"
+            android:layout_marginTop="10dp"
+            android:background="@drawable/bg_photo_upload"
+            android:visibility="gone"
+            tools:visibility="visible">
+
+            <TextView
+                android:id="@+id/tvPhotoStatus"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:layout_gravity="center"
+                android:text="📷 Loading photo…"
+                android:textColor="@color/colorTextSecondary"
+                android:textSize="12sp" />
+
+            <ImageView
+                android:id="@+id/ivPhoto"
+                android:layout_width="match_parent"
+                android:layout_height="match_parent"
+                android:contentDescription="Proof photo"
+                android:foreground="?attr/selectableItemBackground"
+                android:scaleType="centerCrop" />
+        </FrameLayout>
+
+        <LinearLayout
+            android:id="@+id/rowReactions"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:layout_marginTop="10dp"
+            android:orientation="horizontal">
+
+            <TextView
+                android:id="@+id/tvReactOk"
+                android:layout_width="wrap_content"
+                android:layout_height="28dp"
+                android:background="@drawable/bg_reaction"
+                android:gravity="center"
+                android:paddingHorizontal="12dp"
+                android:textColor="@color/colorTextPrimary"
+                android:textSize="12sp"
+                tools:text="✓ 2" />
+
+            <TextView
+                android:id="@+id/tvReactDoubt"
+                android:layout_width="wrap_content"
+                android:layout_height="28dp"
+                android:layout_marginStart="8dp"
+                android:background="@drawable/bg_reaction"
+                android:gravity="center"
+                android:paddingHorizontal="12dp"
+                android:textColor="@color/colorTextPrimary"
+                android:textSize="12sp"
+                tools:text="🤨 1" />
+        </LinearLayout>
+    </LinearLayout>
+</LinearLayout>

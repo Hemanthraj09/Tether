@@ -143,5 +143,12 @@ data class LeaderboardEntry(
     val avatarColorHex: String,
     val isCurrentUser: Boolean,
     val paceLabel: String = "",
-    val hasNudgedToday: Boolean = false
+    val hasNudgedToday: Boolean = false,
+    /** Coding groups only (null elsewhere): verified LeetCode solves. */
+    val solvedToday: Int? = null,
+    val solvedWeek: Int? = null,
+    /** Coding groups can rank by problems solved instead of hours. */
+    val rankedBySolves: Boolean = false,
+    /** e.g. "✓ LeetCode verified", "LeetCode not connected" (coding groups only). */
+    val leetcodeNote: String = ""
 )

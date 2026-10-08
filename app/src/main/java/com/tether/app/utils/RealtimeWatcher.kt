@@ -114,7 +114,13 @@ object RealtimeWatcher {
                     val userName = doc.getString("userName") ?: "Someone"
                     val hours = doc.getDouble("value") ?: 0.0
                     val message = if (hours > 0.0) {
-                        "$userName logged ${Formatters.formatHours(hours)} in ${group.name}"
+                        // "Asha logged 1h 30m in Study Squad: Solved 3 graph problems 📷"
+                        val note = (doc.getString("note") ?: "").trim().let {
+                            if (it.length > 60) it.take(57) + "…" else it
+                        }
+                        val photo = if (doc.getBoolean("hasPhoto") == true) " 📷" else ""
+                        "$userName logged ${Formatters.formatHours(hours)} in ${group.name}" +
+                            (if (note.isNotEmpty()) ": $note" else "") + photo
                     } else if ((doc.getString("note") ?: "").startsWith("Joined")) {
                         "$userName joined ${group.name} 👋"
                     } else {
@@ -143,7 +149,7 @@ object RealtimeWatcher {
         // Single range filter → no composite index; the source is filtered client-side.
         val solves = groups.flatMap { it.members }.toSet().minus(uid).map { memberUid ->
             firestore.collection("users").document(memberUid).collection("completions")
-                .whereGreaterThan("syncedAt", watcherStartedAt)
+                .whereGreaterThanOrEqualTo("syncedAt", DateKeys.startOfTodayMillis())
                 .snapshotFlow()
                 .addedEvents { doc ->
                     if (doc.getString("source") != "leetcode") return@addedEvents null
@@ -169,12 +175,18 @@ object RealtimeWatcher {
             is Event.Nudge -> event.id to event.time
             is Event.GroupLog -> event.id to event.time
         }
-        // Only things that happen after the app started, each exactly once.
-        if (time <= watcherStartedAt || !seenIds.add(id)) return
+        // Everything from today goes into the activity bell exactly once, including
+        // what happened while the app was closed (NotificationStore dedupes by id).
+        if (time < DateKeys.startOfTodayMillis() || !seenIds.add(id)) return
 
         when (event) {
-            is Event.Nudge -> showNudgeNotification(context, event)
-            is Event.GroupLog -> NotificationStore.addNotification(context, event.message)
+            is Event.Nudge -> {
+                NotificationStore.addNotification(context, "⚡ ${event.nudgerName} nudged you", id, time)
+                // A system notification only for nudges that arrive while we're running;
+                // older ones were missed and just appear in the bell.
+                if (time > watcherStartedAt) showNudgeNotification(context, event)
+            }
+            is Event.GroupLog -> NotificationStore.addNotification(context, event.message, id, time)
         }
     }
 

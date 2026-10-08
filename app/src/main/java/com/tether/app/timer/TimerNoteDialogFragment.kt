@@ -5,6 +5,7 @@ import android.view.*
 import androidx.fragment.app.DialogFragment
 import androidx.fragment.app.viewModels
 import com.tether.app.databinding.DialogTimerNoteBinding
+import com.tether.app.domain.Proof
 import com.tether.app.ui.home.GroupFeedViewModel
 import com.tether.app.utils.Formatters
 import com.tether.app.utils.TetherToast
@@ -43,6 +44,7 @@ class TimerNoteDialogFragment : DialogFragment() {
                 if (focusSeconds < 60) "Session too short to log"
                 else "Session over 24h — looks like the timer was left running"
             binding.etNote.visibility = View.GONE
+            binding.tvNoteSubtitle.visibility = View.GONE
             binding.btnLogIt.text = "Close"
             binding.btnLogIt.setOnClickListener { dismiss() }
             return
@@ -53,9 +55,15 @@ class TimerNoteDialogFragment : DialogFragment() {
         binding.tvFocusedTime.text = "You focused for $timeStr"
 
         binding.btnLogIt.setOnClickListener {
-            binding.btnLogIt.isEnabled = false
             val note = binding.etNote.text.toString().trim()
-            viewModel.writeLog(groupId, hours, note)
+            if (!Proof.isNoteValid(note)) {
+                binding.etNote.error = "Tell your group what you did"
+                binding.etNote.requestFocus()
+                return@setOnClickListener
+            }
+            binding.btnLogIt.isEnabled = false
+            // Timer sessions measured the time themselves, so no photo is asked for.
+            viewModel.writeLog(groupId, hours, note, Proof.SOURCE_TIMER)
             TetherToast.show(requireContext(), "Logged $timeStr! Keep it up 🔥")
             dismiss()
         }

@@ -5,6 +5,7 @@ import com.google.firebase.auth.FirebaseUser
 import com.google.firebase.auth.GoogleAuthProvider
 import com.google.firebase.auth.UserProfileChangeRequest
 import com.google.firebase.firestore.FirebaseFirestore
+import com.tether.app.data.UserCache
 import com.tether.app.data.model.User
 import kotlinx.coroutines.tasks.await
 
@@ -43,40 +44,34 @@ class AuthRepository {
                 .createUserWithEmailAndPassword(email, password)
                 .await()
             val user = result.user!!
-            
-            val profileUpdates = com.google.firebase.auth
-                .UserProfileChangeRequest.Builder()
-                .setDisplayName(name)
-                .build()
-            user.updateProfile(profileUpdates).await()
 
-            createUserDocument(user.uid, name, email)
+            user.updateProfile(
+                UserProfileChangeRequest.Builder().setDisplayName(name).build()
+            ).await()
+
+            createUserDocument(user.uid, name)
+            // Not blocking: the account works right away, the email confirms ownership.
+            runCatching { user.sendEmailVerification().await() }
             Result.success(user)
         } catch (e: Exception) {
             Result.failure(e)
         }
     }
 
-    private suspend fun createUserDocument(
-        uid: String,
-        name: String,
-        email: String
-    ) {
-        val user = User(
-            uid = uid,
-            name = name,
-            email = email
-        )
-        firestore
-            .collection("users")
-            .document(uid)
-            .set(user)
+    /**
+     * The public profile only holds what other members need (name, totals).
+     * The email stays in Firebase Auth; group membership lives on the groups.
+     */
+    private suspend fun createUserDocument(uid: String, name: String) {
+        firestore.collection("users").document(uid)
+            .set(User(uid = uid, name = name))
             .await()
     }
 
     fun logout() {
         auth.signOut()
-        com.tether.app.data.UserCache.clear()
+        UserCache.clear()
+        ProofRepository.clearCache()
     }
 
     suspend fun sendPasswordReset(email: String): Result<Unit> {
@@ -88,25 +83,21 @@ class AuthRepository {
         }
     }
 
+    suspend fun resendEmailVerification(): Result<Unit> = runCatching {
+        auth.currentUser?.sendEmailVerification()?.await()
+        Unit
+    }
+
     suspend fun googleSignIn(account: com.google.android.gms.auth.api.signin.GoogleSignInAccount): Result<Unit> {
         return try {
-            val credential = com.google.firebase.auth.GoogleAuthProvider.getCredential(account.idToken, null)
+            val credential = GoogleAuthProvider.getCredential(account.idToken, null)
             val result = auth.signInWithCredential(credential).await()
             val user = result.user ?: throw Exception("Sign-in failed")
 
-            // Create user doc if new user
             val userDoc = firestore.collection("users").document(user.uid).get().await()
             if (!userDoc.exists()) {
                 val name = account.displayName ?: account.email?.substringBefore("@") ?: "User"
-                firestore.collection("users").document(user.uid).set(
-                    mapOf(
-                        "uid" to user.uid,
-                        "name" to name,
-                        "email" to (account.email ?: ""),
-                        "groupIds" to emptyList<String>(),
-                        "totalHours" to 0.0
-                    )
-                ).await()
+                createUserDocument(user.uid, name)
             }
             Result.success(Unit)
         } catch (e: Exception) {

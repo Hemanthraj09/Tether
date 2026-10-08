@@ -12,7 +12,11 @@ import androidx.navigation.NavOptions
 import androidx.navigation.fragment.NavHostFragment
 import com.tether.app.data.leetcode.LeetCodeConfig
 import com.tether.app.data.leetcode.LeetCodeSyncState
+import com.tether.app.data.Migrations
 import com.tether.app.data.repository.AuthRepository
+import com.tether.app.data.repository.ProfileRepository
+import androidx.lifecycle.lifecycleScope
+import kotlinx.coroutines.launch
 import com.tether.app.sync.LeetCodeSyncWorker
 import com.tether.app.databinding.ActivityMainBinding
 import com.tether.app.timer.TetherTimerService
@@ -161,6 +165,22 @@ class MainActivity : AppCompatActivity() {
         LeetCodeConfig.init()
         LeetCodeSyncWorker.schedulePeriodic(this)
         LeetCodeSyncWorker.syncNow(this)
+        lifecycleScope.launch {
+            Migrations.runIfNeeded(applicationContext)
+            askForInterestsOnce()
+        }
+    }
+
+    /** First sign-in on a version with focus areas: ask once (skipping counts as an answer). */
+    private suspend fun askForInterestsOnce() {
+        val (interests, _) = ProfileRepository().loadInterests()
+        if (interests != null) return
+        if (navController.currentDestination?.id != R.id.groupListFragment) return
+        navController.navigate(R.id.interestsFragment, null,
+            NavOptions.Builder()
+                .setEnterAnim(R.anim.fade_in)
+                .setPopExitAnim(R.anim.fade_out)
+                .build())
     }
 
     /**

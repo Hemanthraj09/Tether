@@ -1,0 +1,366 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- Connected account: LeetCode. Everything about the connection, plus its actions. -->
+<LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
+    xmlns:app="http://schemas.android.com/apk/res-auto"
+    xmlns:tools="http://schemas.android.com/tools"
+    android:layout_width="match_parent"
+    android:layout_height="match_parent"
+    android:background="@color/colorBackground"
+    android:orientation="vertical">
+
+    <LinearLayout
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:gravity="center_vertical"
+        android:orientation="horizontal"
+        android:paddingHorizontal="24dp"
+        android:paddingTop="52dp"
+        android:paddingBottom="16dp">
+
+        <ImageButton
+            android:id="@+id/btnBack"
+            android:layout_width="36dp"
+            android:layout_height="36dp"
+            android:background="@drawable/bg_icon_button"
+            android:contentDescription="Back"
+            android:src="@drawable/ic_back" />
+
+        <TextView
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:layout_marginStart="12dp"
+            android:text="LeetCode"
+            android:textColor="@color/colorTextPrimary"
+            android:textSize="24sp"
+            android:textStyle="bold" />
+    </LinearLayout>
+
+    <ScrollView
+        android:layout_width="match_parent"
+        android:layout_height="match_parent"
+        android:clipToPadding="false"
+        android:paddingHorizontal="20dp"
+        android:paddingBottom="32dp">
+
+        <LinearLayout
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:orientation="vertical">
+
+            <!-- Account -->
+            <LinearLayout
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:background="@drawable/bg_card"
+                android:gravity="center_vertical"
+                android:orientation="horizontal"
+                android:padding="16dp">
+
+                <FrameLayout
+                    android:layout_width="48dp"
+                    android:layout_height="48dp"
+                    android:background="@drawable/bg_icon_container_accent">
+
+                    <ImageView
+                        android:layout_width="24dp"
+                        android:layout_height="24dp"
+                        android:layout_gravity="center"
+                        android:importantForAccessibility="no"
+                        android:src="@drawable/ic_code"
+                        app:tint="@color/colorAccent" />
+                </FrameLayout>
+
+                <LinearLayout
+                    android:layout_width="0dp"
+                    android:layout_height="wrap_content"
+                    android:layout_marginStart="14dp"
+                    android:layout_weight="1"
+                    android:orientation="vertical">
+
+                    <TextView
+                        android:id="@+id/tvHandle"
+                        android:layout_width="wrap_content"
+                        android:layout_height="wrap_content"
+                        android:textColor="@color/colorTextPrimary"
+                        android:textSize="18sp"
+                        android:textStyle="bold"
+                        tools:text="\@hemxnth16" />
+
+                    <TextView
+                        android:id="@+id/tvVerifiedBadge"
+                        android:layout_width="wrap_content"
+                        android:layout_height="wrap_content"
+                        android:layout_marginTop="4dp"
+                        android:background="@drawable/bg_reaction"
+                        android:paddingHorizontal="10dp"
+                        android:paddingVertical="3dp"
+                        android:textSize="12sp"
+                        tools:text="✓ Verified owner" />
+                </LinearLayout>
+
+                <TextView
+                    android:id="@+id/btnOpenProfile"
+                    android:layout_width="wrap_content"
+                    android:layout_height="wrap_content"
+                    android:background="@drawable/bg_toggle_active"
+                    android:paddingHorizontal="12dp"
+                    android:paddingVertical="8dp"
+                    android:text="Open ↗"
+                    android:textColor="@color/colorTextPrimary"
+                    android:textSize="13sp" />
+            </LinearLayout>
+
+            <!-- Solved -->
+            <LinearLayout
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:layout_marginTop="12dp"
+                android:background="@drawable/bg_card"
+                android:orientation="vertical"
+                android:padding="16dp">
+
+                <TextView
+                    android:layout_width="wrap_content"
+                    android:layout_height="wrap_content"
+                    android:text="Problems solved"
+                    android:textColor="@color/colorTextSecondary"
+                    android:textSize="13sp" />
+
+                <TextView
+                    android:id="@+id/tvSolvedTotal"
+                    android:layout_width="wrap_content"
+                    android:layout_height="wrap_content"
+                    android:layout_marginTop="2dp"
+                    android:text="–"
+                    android:textColor="@color/colorTextPrimary"
+                    android:textSize="36sp"
+                    android:textStyle="bold"
+                    tools:text="212" />
+
+                <LinearLayout
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:layout_marginTop="12dp"
+                    android:orientation="horizontal">
+
+                    <LinearLayout
+                        android:layout_width="0dp"
+                        android:layout_height="wrap_content"
+                        android:layout_weight="1"
+                        android:orientation="vertical">
+
+                        <TextView
+                            android:id="@+id/tvEasy"
+                            android:layout_width="wrap_content"
+                            android:layout_height="wrap_content"
+                            android:text="–"
+                            android:textColor="#00B8A3"
+                            android:textSize="20sp"
+                            android:textStyle="bold" />
+
+                        <TextView
+                            android:layout_width="wrap_content"
+                            android:layout_height="wrap_content"
+                            android:text="Easy"
+                            android:textColor="@color/colorTextSecondary"
+                            android:textSize="12sp" />
+                    </LinearLayout>
+
+                    <LinearLayout
+                        android:layout_width="0dp"
+                        android:layout_height="wrap_content"
+                        android:layout_weight="1"
+                        android:orientation="vertical">
+
+                        <TextView
+                            android:id="@+id/tvMedium"
+                            android:layout_width="wrap_content"
+                            android:layout_height="wrap_content"
+                            android:text="–"
+                            android:textColor="#FFC01E"
+                            android:textSize="20sp"
+                            android:textStyle="bold" />
+
+                        <TextView
+                            android:layout_width="wrap_content"
+                            android:layout_height="wrap_content"
+                            android:text="Medium"
+                            android:textColor="@color/colorTextSecondary"
+                            android:textSize="12sp" />
+                    </LinearLayout>
+
+                    <LinearLayout
+                        android:layout_width="0dp"
+                        android:layout_height="wrap_content"
+                        android:layout_weight="1"
+                        android:orientation="vertical">
+
+                        <TextView
+                            android:id="@+id/tvHard"
+                            android:layout_width="wrap_content"
+                            android:layout_height="wrap_content"
+                            android:text="–"
+                            android:textColor="#EF4743"
+                            android:textSize="20sp"
+                            android:textStyle="bold" />
+
+                        <TextView
+                            android:layout_width="wrap_content"
+                            android:layout_height="wrap_content"
+                            android:text="Hard"
+                            android:textColor="@color/colorTextSecondary"
+                            android:textSize="12sp" />
+                    </LinearLayout>
+                </LinearLayout>
+
+                <TextView
+                    android:id="@+id/tvStreakLine"
+                    android:layout_width="wrap_content"
+                    android:layout_height="wrap_content"
+                    android:layout_marginTop="12dp"
+                    android:textColor="@color/colorTextSecondary"
+                    android:textSize="13sp"
+                    android:visibility="gone"
+                    tools:text="🔥 12-day LeetCode streak · 140 active days" />
+            </LinearLayout>
+
+            <!-- Strongest topics -->
+            <LinearLayout
+                android:id="@+id/cardTopics"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:layout_marginTop="12dp"
+                android:background="@drawable/bg_card"
+                android:orientation="vertical"
+                android:padding="16dp"
+                android:visibility="gone">
+
+                <TextView
+                    android:layout_width="wrap_content"
+                    android:layout_height="wrap_content"
+                    android:text="Strongest topics"
+                    android:textColor="@color/colorTextSecondary"
+                    android:textSize="13sp" />
+
+                <com.google.android.material.chip.ChipGroup
+                    android:id="@+id/chipsTopics"
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:layout_marginTop="8dp"
+                    app:chipSpacingHorizontal="6dp"
+                    app:chipSpacingVertical="6dp" />
+            </LinearLayout>
+
+            <!-- Sync -->
+            <LinearLayout
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:layout_marginTop="12dp"
+                android:background="@drawable/bg_card"
+                android:gravity="center_vertical"
+                android:orientation="horizontal"
+                android:padding="16dp">
+
+                <LinearLayout
+                    android:layout_width="0dp"
+                    android:layout_height="wrap_content"
+                    android:layout_weight="1"
+                    android:orientation="vertical">
+
+                    <TextView
+                        android:layout_width="wrap_content"
+                        android:layout_height="wrap_content"
+                        android:text="Sync"
+                        android:textColor="@color/colorTextPrimary"
+                        android:textSize="15sp"
+                        android:textStyle="bold" />
+
+                    <TextView
+                        android:id="@+id/tvSyncStatus"
+                        android:layout_width="wrap_content"
+                        android:layout_height="wrap_content"
+                        android:layout_marginTop="2dp"
+                        android:textColor="@color/colorTextSecondary"
+                        android:textSize="12sp"
+                        tools:text="Synced 5 minutes ago · every few hours in the background" />
+                </LinearLayout>
+
+                <TextView
+                    android:id="@+id/btnSyncNow"
+                    android:layout_width="wrap_content"
+                    android:layout_height="wrap_content"
+                    android:layout_marginStart="12dp"
+                    android:background="@drawable/bg_button_primary"
+                    android:paddingHorizontal="14dp"
+                    android:paddingVertical="8dp"
+                    android:text="Sync now"
+                    android:textColor="@color/colorTextPrimary"
+                    android:textSize="13sp"
+                    android:textStyle="bold" />
+            </LinearLayout>
+
+            <!-- Ownership -->
+            <LinearLayout
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:layout_marginTop="12dp"
+                android:background="@drawable/bg_card"
+                android:orientation="vertical"
+                android:padding="16dp">
+
+                <TextView
+                    android:layout_width="wrap_content"
+                    android:layout_height="wrap_content"
+                    android:text="Ownership"
+                    android:textColor="@color/colorTextPrimary"
+                    android:textSize="15sp"
+                    android:textStyle="bold" />
+
+                <TextView
+                    android:id="@+id/tvOwnership"
+                    android:layout_width="wrap_content"
+                    android:layout_height="wrap_content"
+                    android:layout_marginTop="2dp"
+                    android:lineSpacingExtra="2dp"
+                    android:textColor="@color/colorTextSecondary"
+                    android:textSize="12sp"
+                    tools:text="Prove this account is yours so friends see a ✓ next to your solves." />
+
+                <android.widget.Button
+                    android:id="@+id/btnVerify"
+                    android:layout_width="match_parent"
+                    android:layout_height="44dp"
+                    android:layout_marginTop="12dp"
+                    android:background="@drawable/bg_button_secondary"
+                    android:stateListAnimator="@null"
+                    android:text="Verify ownership"
+                    android:textAllCaps="false"
+                    android:textColor="@color/colorTextPrimary"
+                    android:textSize="14sp" />
+            </LinearLayout>
+
+            <!-- How it counts -->
+            <TextView
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:layout_marginTop="12dp"
+                android:background="@drawable/bg_card"
+                android:lineSpacingExtra="3dp"
+                android:padding="16dp"
+                android:text="How it counts in Tether\n• A verified solve today keeps your streak alive in Coding groups, even with no hours logged.\n• Coding groups can rank their leaderboard by problems solved.\n• Your friends' phones check your solves against LeetCode's public data, so only real solves count."
+                android:textColor="@color/colorTextSecondary"
+                android:textSize="12sp" />
+
+            <TextView
+                android:id="@+id/btnDisconnect"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:layout_gravity="center_horizontal"
+                android:layout_marginTop="20dp"
+                android:padding="10dp"
+                android:text="Disconnect LeetCode"
+                android:textColor="@color/colorDanger"
+                android:textSize="14sp" />
+        </LinearLayout>
+    </ScrollView>
+</LinearLayout>

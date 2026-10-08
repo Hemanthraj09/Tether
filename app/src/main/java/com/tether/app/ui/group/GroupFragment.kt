@@ -14,7 +14,9 @@ import androidx.fragment.app.viewModels
 import androidx.lifecycle.lifecycleScope
 import androidx.navigation.fragment.findNavController
 import com.tether.app.R
+import com.tether.app.data.repository.ProfileRepository
 import com.tether.app.databinding.FragmentGroupBinding
+import com.tether.app.domain.Interests
 import com.tether.app.utils.TetherToast
 import kotlinx.coroutines.launch
 
@@ -45,6 +47,12 @@ class GroupFragment : Fragment() {
         selectGoal("Study")
         observeGroupState()
 
+        // Pre-select the goal that matches the user's focus areas.
+        viewLifecycleOwner.lifecycleScope.launch {
+            val (interests, _) = ProfileRepository().loadInterests()
+            if (_binding != null) selectGoal(Interests.defaultGoal(interests))
+        }
+
         binding.btnBack.setOnClickListener {
             findNavController().popBackStack()
         }
@@ -57,6 +65,15 @@ class GroupFragment : Fragment() {
         }
         binding.btnGoalCoding.setOnClickListener {
             selectGoal("Coding")
+        }
+        binding.btnGoalReading.setOnClickListener {
+            selectGoal("Reading")
+        }
+        binding.btnGoalWork.setOnClickListener {
+            selectGoal("Work")
+        }
+        binding.btnGoalHabits.setOnClickListener {
+            selectGoal("Habits")
         }
         binding.btnGoalOther.setOnClickListener {
             selectGoal("Other")
@@ -144,6 +161,18 @@ class GroupFragment : Fragment() {
             binding.btnGoalCoding,
             goal == "Coding",
             R.drawable.ic_code)
+        setGoalButtonState(
+            binding.btnGoalReading,
+            goal == "Reading",
+            R.drawable.ic_bookmark)
+        setGoalButtonState(
+            binding.btnGoalWork,
+            goal == "Work",
+            R.drawable.ic_work)
+        setGoalButtonState(
+            binding.btnGoalHabits,
+            goal == "Habits",
+            R.drawable.ic_check)
         setGoalButtonState(
             binding.btnGoalOther,
             goal == "Other",

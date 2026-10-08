@@ -1,5 +1,6 @@
 package com.tether.app.domain
 
+import com.tether.app.data.repository.CodingStatsRepository
 import com.tether.app.data.repository.LeaderboardEntry
 import com.tether.app.utils.Formatters
 
@@ -51,4 +52,32 @@ object LeaderboardBuilder {
                 hasNudgedToday = uid in nudgedByMe
             )
         }.sortedByDescending { it.todayHours } // stable: ties keep member order
+
+    /**
+     * Adds coding stats to a Coding group's leaderboard and, if the group ranks
+     * by problems solved, re-sorts by today's solves (hours break ties).
+     */
+    fun withSolves(
+        entries: List<LeaderboardEntry>,
+        stats: Map<String, CodingStatsRepository.MemberStats>,
+        rankBySolves: Boolean
+    ): List<LeaderboardEntry> {
+        val merged = entries.map { e ->
+            val s = stats[e.uid]
+            e.copy(
+                solvedToday = s?.solvedToday ?: 0,
+                solvedWeek = s?.solvedWeek ?: 0,
+                rankedBySolves = rankBySolves,
+                leetcodeNote = when {
+                    s == null || s.leetcodeUsername == null -> "LeetCode not connected"
+                    s.unconfirmedCount > 0 -> "⚠ ${s.unconfirmedCount} unconfirmed"
+                    s.ownershipVerified == true -> "✓ LeetCode verified"
+                    else -> "@${s.leetcodeUsername}"
+                }
+            )
+        }
+        return if (rankBySolves) {
+            merged.sortedWith(compareByDescending<LeaderboardEntry> { it.solvedToday ?: 0 }.thenByDescending { it.todayHours })
+        } else merged
+    }
 }

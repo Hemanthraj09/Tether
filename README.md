@@ -29,10 +29,10 @@ Tether keeps accountability tight — groups are invite-only, capped at 6 member
 ## Features
 
 ### 📊 Real-time Leaderboard
-Daily leaderboard that resets sharply at midnight. Sorted by today's hours — not total, not weekly. Show up every day or fall behind.
+Daily leaderboard that resets sharply at midnight. It is sorted by today's hours, not by total or weekly hours, and Coding groups can rank by problems solved instead. Show up every day or fall behind.
 
 ### 🔥 Streaks & Heatmap
-Per-group streaks tracked independently across all your groups. Full GitHub-style heatmap on your profile showing the entire calendar year at a glance.
+Per-group streaks tracked independently across all your groups. Full GitHub-style heatmap on your profile showing the entire calendar year at a glance. If LeetCode is connected, it can switch to solves per day.
 
 ### ⏱️ Focus Timer
 Two modes — **Stopwatch** for tracking real work time (with 5/10-minute breaks), **Pomodoro** for 25/5 or 50/10 focus/break cycles. Runs as a foreground service with a live notification; time is computed from timestamps so it stays exact with the screen off, and a session survives the app being killed. Only focus time is logged.
@@ -49,8 +49,22 @@ If you're behind yesterday's pace, a chip appears on the leaderboard card. Disap
 ### 🔗 Connected Accounts
 Progress you don't have to log by hand. Connect your LeetCode username and problems you solve on **any device** sync automatically in the background (WorkManager, every few hours and on app open). Only public profile data is read. LeetCode is the first source; integrations are tied to a group's goal, so gym or study groups never see coding features.
 
-### 🏁 Tracks
-Structured challenges a group works through together. Coding groups can race through **NeetCode 150**, **Striver's A2Z** or **Rising Brain's** pattern sheet: synced LeetCode solves tick items off with a verified ✓, everyone's progress shows on the group screen, and each item shows which friends have finished it.
+### 🧩 LeetCode in the core loop
+In a Coding group, LeetCode counts the same way logged hours do:
+- **Streaks:** a verified solve today keeps your group streak alive, even if you didn't log any hours.
+- **Ranking:** the group creator chooses whether the leaderboard ranks **hours logged** or **problems solved**.
+- **Rows:** every member's row shows their solves today or this week, plus a trust note (✓ verified, ⚠ unconfirmed, or not connected).
+- **Profile:** your heatmap can switch between hours and LeetCode solves.
+
+Solves that LeetCode's own public data contradicts are not counted.
+
+### 📷 Proof, not just hours
+Every log says **what you did** ("Solved 3 graph problems"). A group's creator sets photo proof to **Off**, **Optional** or **Required**. In Required groups a manual log needs a fresh camera photo; focus-timer sessions are exempt because the timer measured the time.
+
+Photos are shrunk on your phone (about 60 KB, location data stripped), visible only to your group, and gone after the day. Today's logs show on the group screen, where friends can back a log with **✓** or question it with **🤨**.
+
+### 🎯 Said vs. Did
+Pick what you want to stay accountable for (coding, studies, fitness, reading, work, habits) and set a weekly target for each. Your profile compares that with the hours you actually logged this week in matching groups: on track, behind pace (by how much), or "You said this matters. Nothing logged yet."
 
 ### 🔔 Activity Feed
 Today's Activity feed on the home screen collects your groups' logs, joins and verified solves in real time. Unread dot on the bell icon when there's something new.
@@ -97,13 +111,13 @@ A detailed write-up of every feature, design decision and trade-off is in **[doc
 
 ## Engineering
 
-**Testing** — 64 unit tests cover the logic that decides what users see: streak rules (month/year/leap boundaries), leaderboard ranking and pace, the timer state machine (Pomodoro catch-up after sleep, breaks, reboot recovery), date keys, the heatmap grid, LeetCode response parsing (recorded fixtures), solve merging, sync backoff and track progress.
+**Testing** — 87 unit tests cover the logic that decides what users see: streak rules (month/year/leap boundaries), leaderboard ranking and pace, the timer state machine (Pomodoro catch-up after sleep, breaks, reboot recovery), date keys, the heatmap grid, LeetCode response parsing (recorded fixtures), solve merging, sync backoff, solve counting and solve-based ranking, LeetCode ownership/claim verification, Said vs. Did pacing, proof-photo sizing and the Today list.
 
 ```bash
 ./gradlew testDebugUnitTest
 ```
 
-**Security rules** — [`firestore.rules`](firestore.rules) only lets users write data about themselves, requires group membership for group writes, caps the 6-member limit server-side, and only allows leaderboard counters to increase by ≤ 24h per write. 53 emulator tests replay every write the app makes plus abuse cases.
+**Security rules** — [`firestore.rules`](firestore.rules) keeps groups undiscoverable (invite codes can only be fetched one at a time), shows group data to members only, keeps emails off public profiles, requires every leaderboard increase to cite a matching log in the same atomic batch, caps totals at 24 h/day, validates streak transitions and checks dates against the server clock. A self-audit found 8 exploits; each is fixed and covered by one of the **97 emulator tests**. Proof photos and reactions are rule-checked too: a photo must arrive in the same batch as its brand-new log, uses the server's clock, and stops being served after 24 hours.
 
 ```bash
 cd firestore-tests && npm install && npm test   # needs Java 11+ for the emulator
@@ -145,26 +159,31 @@ cd Tether
 ## Firestore Schema
 
 ```
-users/{uid}
-  → name, email, groupIds[], totalHours, uid
+users/{uid}                        (public profile: no email, no group list)
+  → uid, name, totalHours, leetcodeUsername, interests[], targets{area: hours}
 
 groups/{gid}
-  → name, goalType, members[], inviteCode, createdBy, isSolo, createdAt
+  → name, goalType, members[], inviteCode, createdBy, isSolo, createdAt, metric ("hours" | "solves"),
+    proof ("off" | "optional" | "required")
 
 logs/{lid}
-  → userId, groupId, userName, date, value (hours), note, createdAt
+  → userId, groupId, userName, date, value (hours), note (what you did), createdAt, source, hasPhoto
 
 groupStats/{gid}
   → daily/{date}/{uid}: hours
   → weekly/{weekKey}/{uid}: hours
   → streaks/{uid}: currentStreak, longestStreak, lastLogDate
   → nudges/{date}_{fromUid}_{toUid}: nudgerUid, nudgerName, nudgedUid, date, timestamp
+  → proofs/{logId}: uid, date, createdAt, image (≤ 150 KB JPEG bytes, visible 24 h)
+  → reactions/{logId}_{uid}: logId, uid, date, kind ("ok" | "doubt")
 
 users/{uid}/completions/{key}
-  → title, slug, source ("leetcode" | "self"), completedAt, syncedAt
+  → title, slug, source ("leetcode"), completedAt, syncedAt
+users/{uid}/meta/completionIndex   → one-document index (members read 1 doc each)
+users/{uid}/heatmap/{year}         → "yyyy-MM-dd": hours (owner only)
 
-leetcodeUsernames/{handle}
-  → uid, username   (one Tether account per LeetCode handle)
+inviteCodes/{code}
+  → groupId, createdBy   (fetched one code at a time, never listable)
 ```
 
 ---

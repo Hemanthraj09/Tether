@@ -46,7 +46,10 @@ object LeetCodeParser {
             hard = counts["Hard"] ?: 0,
             streak = calendar?.optInt("streak", 0) ?: 0,
             activeDays = calendar?.optInt("totalActiveDays", 0) ?: 0,
-            topics = topics.sortedByDescending { it.solved }
+            topics = topics.sortedByDescending { it.solved },
+            aboutMe = user.optJSONObject("profile")
+                ?.takeUnless { it.isNull("aboutMe") }
+                ?.optString("aboutMe").orEmpty()
         )
     }
 

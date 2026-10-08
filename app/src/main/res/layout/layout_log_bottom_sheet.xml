@@ -259,6 +259,94 @@
                     android:textSize="14sp" />
             </LinearLayout>
 
+            <!-- SECTION C — Photo proof (hidden when the group turned it off) -->
+            <LinearLayout
+                android:id="@+id/sectionProof"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:layout_marginTop="24dp"
+                android:orientation="vertical">
+
+                <TextView
+                    android:id="@+id/tvProofLabel"
+                    android:layout_width="wrap_content"
+                    android:layout_height="wrap_content"
+                    android:layout_marginBottom="8dp"
+                    android:text="Photo proof (optional)"
+                    android:textColor="@color/colorTextSecondary"
+                    android:textSize="14sp" />
+
+                <FrameLayout
+                    android:id="@+id/boxProof"
+                    android:layout_width="match_parent"
+                    android:layout_height="160dp"
+                    android:background="@drawable/bg_photo_upload"
+                    android:clickable="true"
+                    android:focusable="true"
+                    android:foreground="?attr/selectableItemBackground">
+
+                    <LinearLayout
+                        android:id="@+id/proofPlaceholder"
+                        android:layout_width="wrap_content"
+                        android:layout_height="wrap_content"
+                        android:layout_gravity="center"
+                        android:gravity="center_horizontal"
+                        android:orientation="vertical">
+
+                        <ImageView
+                            android:layout_width="32dp"
+                            android:layout_height="32dp"
+                            android:contentDescription="Add a photo"
+                            android:src="@drawable/ic_camera"
+                            app:tint="@color/colorTextSecondary" />
+
+                        <TextView
+                            android:id="@+id/tvProofHint"
+                            android:layout_width="wrap_content"
+                            android:layout_height="wrap_content"
+                            android:layout_marginTop="8dp"
+                            android:text="Add a photo of what you did"
+                            android:textColor="@color/colorTextSecondary"
+                            android:textSize="13sp" />
+                    </LinearLayout>
+
+                    <ImageView
+                        android:id="@+id/ivProofPreview"
+                        android:layout_width="match_parent"
+                        android:layout_height="match_parent"
+                        android:contentDescription="Proof photo"
+                        android:scaleType="centerCrop"
+                        android:visibility="gone" />
+
+                    <ProgressBar
+                        android:id="@+id/proofProgress"
+                        android:layout_width="32dp"
+                        android:layout_height="32dp"
+                        android:layout_gravity="center"
+                        android:visibility="gone" />
+
+                    <ImageButton
+                        android:id="@+id/btnRemoveProof"
+                        android:layout_width="32dp"
+                        android:layout_height="32dp"
+                        android:layout_gravity="top|end"
+                        android:layout_margin="8dp"
+                        android:background="@drawable/bg_icon_container"
+                        android:contentDescription="Remove photo"
+                        android:src="@drawable/ic_close"
+                        android:visibility="gone"
+                        app:tint="@color/colorTextPrimary" />
+                </FrameLayout>
+
+                <TextView
+                    android:layout_width="wrap_content"
+                    android:layout_height="wrap_content"
+                    android:layout_marginTop="6dp"
+                    android:text="Only your group sees it, and only today."
+                    android:textColor="#555555"
+                    android:textSize="11sp" />
+            </LinearLayout>
+
         </LinearLayout>
     </ScrollView>
 

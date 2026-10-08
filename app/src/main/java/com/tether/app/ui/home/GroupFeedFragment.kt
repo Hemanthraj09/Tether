@@ -3,10 +3,13 @@ package com.tether.app.ui.home
 import android.content.ClipData
 import android.content.ClipboardManager
 import android.content.Context
+import android.content.Intent
 import android.os.Bundle
 import android.view.LayoutInflater
 import android.view.View
 import android.view.ViewGroup
+import android.widget.ImageView
+import android.widget.TextView
 import androidx.fragment.app.Fragment
 import androidx.fragment.app.viewModels
 import androidx.lifecycle.Lifecycle
@@ -22,9 +25,13 @@ import com.tether.app.timer.TimerModeDialogFragment
 import com.tether.app.timer.TimerNoteDialogFragment
 import com.tether.app.ui.leaderboard.LeaderboardAdapter
 import com.tether.app.ui.leaderboard.toLeaderboardItems
-import com.tether.app.ui.tracks.RaceStandingsView
-import com.tether.app.utils.navigateSafe
-import androidx.core.os.bundleOf
+import com.tether.app.data.model.Group
+import com.tether.app.data.repository.TodayLog
+import com.tether.app.domain.Proof
+import com.tether.app.ui.common.SheetOption
+import com.tether.app.ui.common.TetherDialogs
+import com.tether.app.ui.common.TetherSheet
+import com.tether.app.utils.Formatters
 import com.tether.app.ui.log.LogBottomSheetFragment
 import com.tether.app.utils.TetherToast
 import com.tether.app.utils.showOnce
@@ -37,6 +44,7 @@ class GroupFeedFragment : Fragment() {
     private val viewModel: GroupFeedViewModel by viewModels()
 
     private lateinit var membersAdapter: LeaderboardAdapter
+    private lateinit var todayAdapter: TodayLogAdapter
 
     override fun onCreateView(
         inflater: LayoutInflater,
@@ -64,6 +72,13 @@ class GroupFeedFragment : Fragment() {
         }
         binding.membersRecyclerView.layoutManager = LinearLayoutManager(requireContext())
         binding.membersRecyclerView.adapter = membersAdapter
+
+        todayAdapter = TodayLogAdapter(
+            onReact = { item, kind -> viewModel.react(item, kind) },
+            bindPhoto = { item, imageView, status -> bindPhoto(item, imageView, status) }
+        )
+        binding.todayRecyclerView.layoutManager = LinearLayoutManager(requireContext())
+        binding.todayRecyclerView.adapter = todayAdapter
 
         binding.btnFeedBack.setOnClickListener {
             findNavController().popBackStack()
@@ -116,7 +131,8 @@ class GroupFeedFragment : Fragment() {
                         binding.tvFeedGroupName.text = group.name
                         val count = group.members.size
                         binding.tvFeedGroupGoal.text =
-                            "${group.goalType} • $count member" + if (count != 1) "s" else ""
+                            "${group.goalType} • $count member" + (if (count != 1) "s" else "") +
+                            (if (Proof.normalizeMode(group.proof) == Proof.MODE_REQUIRED) " • 📷 photo required" else "")
                         binding.btnGroupInfo.visibility =
                             if (group.inviteCode.isNotEmpty()) View.VISIBLE else View.GONE
                     }
@@ -126,11 +142,11 @@ class GroupFeedFragment : Fragment() {
                         if (stats != null) membersAdapter.submitList(stats.toLeaderboardItems())
                     }
                 }
-                launch { viewModel.race.collect { renderRace(it) } }
                 launch {
-                    viewModel.leetCodeTotals.collect { totals ->
-                        val standings = viewModel.race.value?.standings.orEmpty()
-                        if (standings.isNotEmpty()) RaceStandingsView.render(binding.layoutRaceMembers, standings, totals)
+                    viewModel.todayLogs.collect { logs ->
+                        if (logs == null) return@collect
+                        todayAdapter.submitList(logs)
+                        binding.tvTodayEmpty.visibility = if (logs.isEmpty()) View.VISIBLE else View.GONE
                     }
                 }
                 launch {
@@ -154,63 +170,58 @@ class GroupFeedFragment : Fragment() {
         }
     }
 
-    // ── Track race ───────────────────────────────────────────────
-
-    private fun renderRace(state: RaceCardState?) {
-        if (state == null || !state.available) {
-            binding.cardTrackRace.visibility = View.GONE
-            return
-        }
-        binding.cardTrackRace.visibility = View.VISIBLE
-        val track = state.track
-        if (track == null) {
-            binding.tvRaceTitle.text = "🏁 Track race"
-            binding.tvRaceSubtitleCard.visibility = View.VISIBLE
-            binding.tvRaceSubtitleCard.text = if (state.isCreator)
-                "Pick a track and work through it together. LeetCode solves tick off automatically."
-            else "No track yet. The group creator can start one."
-            binding.btnRaceAction.visibility = if (state.isCreator) View.VISIBLE else View.GONE
-            binding.btnRaceAction.text = "Start"
-            binding.layoutRaceMembers.removeAllViews()
-            binding.cardTrackRace.setOnClickListener(null)
-            binding.cardTrackRace.isClickable = false
-        } else {
-            binding.tvRaceTitle.text = "🏁 ${track.name}"
-            binding.tvRaceSubtitleCard.visibility = View.GONE
-            binding.btnRaceAction.visibility = View.VISIBLE
-            binding.btnRaceAction.text = "Open"
-            RaceStandingsView.render(binding.layoutRaceMembers, state.standings, viewModel.leetCodeTotals.value)
-            binding.cardTrackRace.setOnClickListener { openTrack(track.id) }
-            if (state.isCreator) {
-                binding.cardTrackRace.setOnLongClickListener { showTrackPicker(); true }
+    /** Loads a proof photo into a row; rows are recycled, so check the tag first. */
+    private fun bindPhoto(item: TodayLog, imageView: ImageView, status: TextView) {
+        val logId = item.log.id
+        viewLifecycleOwner.lifecycleScope.launch {
+            val bitmap = viewModel.loadPhoto(logId)
+            if (imageView.tag != logId) return@launch
+            if (bitmap == null) {
+                status.text = "📷 Photo no longer available"
+                imageView.setOnClickListener(null)
+            } else {
+                status.text = ""
+                imageView.setImageBitmap(bitmap)
+                imageView.setOnClickListener {
+                    val who = if (item.isMine) "You" else item.log.userName
+                    TetherDialogs.photo(requireContext(), bitmap,
+                        "$who · ${Formatters.formatHours(item.log.value)}\n${item.log.note}")
+                }
             }
-        }
-        binding.btnRaceAction.setOnClickListener {
-            if (track == null) showTrackPicker() else openTrack(track.id)
         }
     }
 
-    private fun openTrack(trackId: String) {
-        findNavController().navigateSafe(
-            R.id.action_feed_to_track,
-            bundleOf("trackId" to trackId, "groupId" to viewModel.groupId)
+    /** Any group: the creator decides whether logs need a photo. */
+    private fun showProofPicker() {
+        val current = Proof.normalizeMode(viewModel.group.value?.proof)
+        fun option(mode: String, label: String, description: String, icon: Int) =
+            SheetOption(label, description, icon = icon, selected = mode == current) { viewModel.setProofMode(mode) }
+        TetherSheet.show(
+            requireContext(),
+            title = "Photo proof",
+            subtitle = "Should logs in this group come with a photo?",
+            options = listOf(
+                option(Proof.MODE_OFF, "Off", "No photos, just what you did", R.drawable.ic_close),
+                option(Proof.MODE_OPTIONAL, "Optional", "Members can add a photo to any log", R.drawable.ic_image),
+                option(Proof.MODE_REQUIRED, "Required",
+                    "Every manual log needs a fresh camera photo. Focus sessions are exempt.", R.drawable.ic_camera)
+            )
         )
     }
 
-    private fun showTrackPicker() {
-        viewLifecycleOwner.lifecycleScope.launch {
-            val tracks = viewModel.tracksForGroup()
-            if (_binding == null || tracks.isEmpty()) return@launch
-            val labels = tracks.map { "${it.name}  ·  ${it.itemCount} items" }.toMutableList()
-            val hasTrack = viewModel.race.value?.track != null
-            if (hasTrack) labels.add("End race")
-            android.app.AlertDialog.Builder(requireContext())
-                .setTitle(if (hasTrack) "Change track" else "Choose a track")
-                .setItems(labels.toTypedArray()) { _, which ->
-                    viewModel.setTrack(if (which < tracks.size) tracks[which].id else "")
-                }
-                .show()
-        }
+    /** Coding groups: the creator picks what the leaderboard ranks. */
+    private fun showMetricPicker() {
+        val current = viewModel.group.value?.metric ?: Group.METRIC_HOURS
+        TetherSheet.show(
+            requireContext(),
+            title = "Rank the leaderboard by",
+            options = listOf(
+                SheetOption("Hours logged", "Time spent, from logs and focus sessions", icon = R.drawable.ic_flame,
+                    selected = current == Group.METRIC_HOURS) { viewModel.setMetric(Group.METRIC_HOURS) },
+                SheetOption("Problems solved", "Verified LeetCode solves; hours break ties", icon = R.drawable.ic_code,
+                    selected = current == Group.METRIC_SOLVES) { viewModel.setMetric(Group.METRIC_SOLVES) }
+            )
+        )
     }
 
     private fun updateSessionButton(isRunning: Boolean) {
@@ -224,59 +235,75 @@ class GroupFeedFragment : Fragment() {
     }
 
     private fun showInviteCode() {
-        val code = viewModel.group.value?.inviteCode ?: return
-        if (code.isEmpty()) return
-        val popup = android.widget.PopupMenu(requireContext(), binding.btnGroupInfo)
-        popup.menu.add("Invite Code: $code  (tap to copy)")
-        popup.setOnMenuItemClickListener {
-            val clipboard = requireContext().getSystemService(Context.CLIPBOARD_SERVICE) as ClipboardManager
-            clipboard.setPrimaryClip(ClipData.newPlainText("Tether invite code", code))
-            TetherToast.show(requireContext(), "Invite code copied")
-            true
-        }
-        popup.show()
+        val group = viewModel.group.value ?: return
+        val code = group.inviteCode.ifEmpty { return }
+        TetherSheet.show(
+            requireContext(),
+            title = "Invite friends",
+            subtitle = "Share this code. Up to 6 people can be in ${group.name}.",
+            headline = code,
+            options = listOf(
+                SheetOption("Copy code", icon = R.drawable.ic_copy) {
+                    val clipboard = requireContext().getSystemService(Context.CLIPBOARD_SERVICE) as ClipboardManager
+                    clipboard.setPrimaryClip(ClipData.newPlainText("Tether invite code", code))
+                    TetherToast.show(requireContext(), "Invite code copied")
+                },
+                SheetOption("Share invite", "Send it on WhatsApp, Telegram, anywhere", icon = R.drawable.ic_share) {
+                    val text = "Join my group \"${group.name}\" on Tether. Invite code: $code"
+                    val send = Intent(Intent.ACTION_SEND).setType("text/plain").putExtra(Intent.EXTRA_TEXT, text)
+                    startActivity(Intent.createChooser(send, "Share invite"))
+                }
+            )
+        )
     }
 
     private fun showGroupOptionsMenu() {
         // Wait for the group to load so the creator never sees "Leave".
-        if (viewModel.group.value == null) return
-        val groupName = binding.tvFeedGroupName.text.toString()
-        if (viewModel.isCreator) {
-            val canRace = viewModel.race.value?.available == true
-            val items = if (canRace) arrayOf("Change track", "Delete Group") else arrayOf("Delete Group")
-            android.app.AlertDialog.Builder(requireContext())
-                .setTitle(groupName)
-                .setItems(items) { _, which ->
-                    when (items[which]) {
-                        "Change track" -> showTrackPicker()
-                        else -> confirmDeleteGroup(groupName)
-                    }
-                }
-                .show()
-        } else {
-            android.app.AlertDialog.Builder(requireContext())
-                .setTitle(groupName)
-                .setItems(arrayOf("Leave Group")) { _, _ -> confirmLeaveGroup(groupName) }
-                .show()
+        val group = viewModel.group.value ?: return
+        val options = mutableListOf<SheetOption>()
+        if (group.inviteCode.isNotEmpty()) {
+            options += SheetOption("Invite friends", "Code ${group.inviteCode}", icon = R.drawable.ic_group) { showInviteCode() }
         }
+        if (viewModel.isCreator) {
+            options += SheetOption("Photo proof", proofLabel(group.proof), icon = R.drawable.ic_camera) { showProofPicker() }
+            if (viewModel.isCodingGroup) {
+                options += SheetOption("Rank leaderboard by",
+                    if (group.metric == Group.METRIC_SOLVES) "Problems solved" else "Hours logged",
+                    icon = R.drawable.ic_trophy) { showMetricPicker() }
+            }
+            options += SheetOption("Delete group", "Removes it for everyone", icon = R.drawable.ic_delete,
+                destructive = true) { confirmDeleteGroup(group.name) }
+        } else {
+            options += SheetOption("Leave group", icon = R.drawable.ic_logout, destructive = true) { confirmLeaveGroup(group.name) }
+        }
+        TetherSheet.show(requireContext(), title = group.name, subtitle = binding.tvFeedGroupGoal.text.toString(),
+            options = options)
+    }
+
+    private fun proofLabel(mode: String) = when (Proof.normalizeMode(mode)) {
+        Proof.MODE_OFF -> "Off"
+        Proof.MODE_REQUIRED -> "Required"
+        else -> "Optional"
     }
 
     private fun confirmDeleteGroup(groupName: String) {
-        android.app.AlertDialog.Builder(requireContext())
-            .setTitle("Delete Group")
-            .setMessage("Are you sure you want to delete \"$groupName\"? This cannot be undone.")
-            .setPositiveButton("Delete") { _, _ -> viewModel.deleteGroup() }
-            .setNegativeButton("Cancel", null)
-            .show()
+        TetherDialogs.confirm(
+            requireContext(),
+            title = "Delete \"$groupName\"?",
+            message = "The group is removed for every member. Everyone keeps their own hours and heatmap. This can't be undone.",
+            confirmText = "Delete",
+            destructive = true
+        ) { viewModel.deleteGroup() }
     }
 
     private fun confirmLeaveGroup(groupName: String) {
-        android.app.AlertDialog.Builder(requireContext())
-            .setTitle("Leave Group")
-            .setMessage("Are you sure you want to leave \"$groupName\"?")
-            .setPositiveButton("Leave") { _, _ -> viewModel.leaveGroup() }
-            .setNegativeButton("Cancel", null)
-            .show()
+        TetherDialogs.confirm(
+            requireContext(),
+            title = "Leave \"$groupName\"?",
+            message = "You can rejoin later with the invite code, if there's still room.",
+            confirmText = "Leave",
+            destructive = true
+        ) { viewModel.leaveGroup() }
     }
 
     override fun onDestroyView() {

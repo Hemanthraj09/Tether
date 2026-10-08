@@ -22,14 +22,15 @@ object NotificationStore {
     private const val KEY_DATE = "notif_date"
     private const val KEY_ITEMS = "notif_items"
     private const val KEY_UNREAD = "notif_unread"
+    private const val KEY_SEEN = "notif_seen_ids"
 
     private val _unread = MutableStateFlow(false)
     private var unreadLoaded = false
 
     private fun todayKey(): String = DateKeys.today()
 
-    private fun timeLabel(): String =
-        SimpleDateFormat("hh:mm a", Locale.getDefault()).format(Date())
+    private fun timeLabel(timeMillis: Long): String =
+        SimpleDateFormat("hh:mm a", Locale.getDefault()).format(Date(timeMillis))
 
     /** Observable unread state for the bell dot. */
     fun unreadFlow(context: Context): StateFlow<Boolean> {
@@ -40,32 +41,39 @@ object NotificationStore {
         return _unread.asStateFlow()
     }
 
-    fun addNotification(context: Context, message: String) {
+    /**
+     * Adds an event to today's activity list (newest first).
+     * [id] makes it idempotent: the watcher replays today's events on every app
+     * start, so things that happened while the app was closed still show up,
+     * exactly once.
+     */
+    fun addNotification(
+        context: Context,
+        message: String,
+        id: String? = null,
+        timeMillis: Long = System.currentTimeMillis()
+    ) {
         val prefs = context.getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE)
         val storedDate = prefs.getString(KEY_DATE, "")
         val today = todayKey()
+        val sameDay = storedDate == today
 
-        // Reset if new day
-        val existingJson = if (storedDate == today) {
-            prefs.getString(KEY_ITEMS, "[]") ?: "[]"
-        } else {
-            "[]"
-        }
+        val seen = if (sameDay) prefs.getStringSet(KEY_SEEN, emptySet()).orEmpty() else emptySet()
+        if (id != null && id in seen) return
 
-        val array = JSONArray(existingJson)
-        val obj = JSONObject().apply {
+        val existing = JSONArray(if (sameDay) prefs.getString(KEY_ITEMS, "[]") ?: "[]" else "[]")
+        val items = (0 until existing.length()).map { existing.getJSONObject(it) }.toMutableList()
+        items.add(JSONObject().apply {
             put("message", message)
-            put("timestamp", timeLabel())
-            put("timeMillis", System.currentTimeMillis())
-        }
-        // Insert at index 0 (newest first)
-        val newArray = JSONArray()
-        newArray.put(obj)
-        for (i in 0 until array.length()) newArray.put(array.get(i))
+            put("timestamp", timeLabel(timeMillis))
+            put("timeMillis", timeMillis)
+        })
+        items.sortByDescending { it.optLong("timeMillis") }
 
         prefs.edit()
             .putString(KEY_DATE, today)
-            .putString(KEY_ITEMS, newArray.toString())
+            .putString(KEY_ITEMS, JSONArray(items).toString())
+            .putStringSet(KEY_SEEN, if (id != null) seen + id else seen)
             .putBoolean(KEY_UNREAD, true)
             .apply()
         _unread.value = true

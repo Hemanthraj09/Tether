@@ -1,0 +1,52 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- Weekly target for one focus area: "💻 Coding / DSA   −  8h  +". -->
+<LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
+    xmlns:tools="http://schemas.android.com/tools"
+    android:layout_width="match_parent"
+    android:layout_height="wrap_content"
+    android:layout_marginTop="8dp"
+    android:background="@drawable/bg_input_field"
+    android:gravity="center_vertical"
+    android:orientation="horizontal"
+    android:paddingHorizontal="14dp"
+    android:paddingVertical="8dp">
+
+    <TextView
+        android:id="@+id/tvTargetLabel"
+        android:layout_width="0dp"
+        android:layout_height="wrap_content"
+        android:layout_weight="1"
+        android:textColor="@color/colorTextPrimary"
+        android:textSize="14sp"
+        tools:text="💻 Coding / DSA" />
+
+    <android.widget.Button
+        android:id="@+id/btnTargetMinus"
+        android:layout_width="36dp"
+        android:layout_height="36dp"
+        android:background="@drawable/bg_stepper_btn"
+        android:padding="0dp"
+        android:text="−"
+        android:textColor="@color/colorTextPrimary"
+        android:textSize="18sp" />
+
+    <TextView
+        android:id="@+id/tvTargetValue"
+        android:layout_width="64dp"
+        android:layout_height="wrap_content"
+        android:gravity="center"
+        android:textColor="@color/colorAccent"
+        android:textSize="15sp"
+        android:textStyle="bold"
+        tools:text="8h/wk" />
+
+    <android.widget.Button
+        android:id="@+id/btnTargetPlus"
+        android:layout_width="36dp"
+        android:layout_height="36dp"
+        android:background="@drawable/bg_stepper_btn"
+        android:padding="0dp"
+        android:text="+"
+        android:textColor="@color/colorTextPrimary"
+        android:textSize="18sp" />
+</LinearLayout>

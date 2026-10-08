@@ -1,23 +1,23 @@
 package com.tether.app.ui.home
 
 import android.app.Application
+import android.graphics.Bitmap
 import androidx.lifecycle.AndroidViewModel
 import androidx.lifecycle.SavedStateHandle
 import androidx.lifecycle.viewModelScope
 import com.google.firebase.auth.FirebaseAuth
 import com.google.firebase.firestore.FirebaseFirestore
 import com.tether.app.data.model.Group
+import com.tether.app.data.repository.BoardRepository
+import com.tether.app.data.repository.CodingStatsRepository
 import com.tether.app.data.repository.GroupManagementRepository
 import com.tether.app.data.repository.LeaderboardEntry
 import com.tether.app.data.repository.LeaderboardRepository
 import com.tether.app.data.repository.LogRepository
-import com.tether.app.data.repository.LeetCodeRepository
 import com.tether.app.data.repository.NudgeRepository
-import com.tether.app.data.repository.RaceRepository
-import com.tether.app.data.tracks.Track
-import com.tether.app.data.tracks.TrackRepository
-import com.tether.app.domain.TrackProgress
-import com.tether.app.ui.tracks.RaceStanding
+import com.tether.app.data.repository.ProofRepository
+import com.tether.app.data.repository.TodayLog
+import com.tether.app.data.repository.TodayRepository
 import com.tether.app.data.snapshotFlow
 import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.NonCancellable
@@ -38,14 +38,6 @@ import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 
-/** Race card on the group screen. [available] = this group's goal has tracks. */
-data class RaceCardState(
-    val available: Boolean,
-    val isCreator: Boolean,
-    val track: Track?,
-    val standings: List<RaceStanding>
-)
-
 sealed class GroupFeedEvent {
     data class Message(val text: String, val isError: Boolean = false) : GroupFeedEvent()
     object LeftGroup : GroupFeedEvent()
@@ -64,6 +56,8 @@ class GroupFeedViewModel(app: Application, savedStateHandle: SavedStateHandle) :
     private val groupManagementRepository = GroupManagementRepository()
     private val leaderboardRepository = LeaderboardRepository()
     private val nudgeRepository = NudgeRepository()
+    private val todayRepository = TodayRepository()
+    private val proofRepository = ProofRepository()
 
     private val currentUid = FirebaseAuth.getInstance().currentUser?.uid ?: ""
 
@@ -75,61 +69,56 @@ class GroupFeedViewModel(app: Application, savedStateHandle: SavedStateHandle) :
             .map { it?.toObject(Group::class.java) })
             .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), null)
 
-    /** Members ranked by today's hours; null while the first data is loading. */
+    /**
+     * Members ranked by today's hours, or by verified LeetCode solves in Coding
+     * groups that chose that metric; null while the first data is loading.
+     */
     val memberStats: StateFlow<List<LeaderboardEntry>?> =
         (if (groupId.isEmpty()) kotlinx.coroutines.flow.flowOf(emptyList())
-        else leaderboardRepository.observeLeaderboard(groupId))
+        else BoardRepository(app).observe(groupId))
             .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), null)
 
     val isCreator: Boolean
         get() = group.value?.createdBy == currentUid
 
-    // ── Track race (goals with tracks only, e.g. Coding) ─────────
+    val isCodingGroup: Boolean
+        get() = group.value?.goalType?.let { CodingStatsRepository.isCodingGoal(it) } == true
 
-    private val trackRepository = TrackRepository(app)
-    private val raceRepository = RaceRepository()
+    /** Today's logs in this group (what was done, photo, reactions), newest first. */
+    val todayLogs: StateFlow<List<TodayLog>?> =
+        (if (groupId.isEmpty()) flowOf(emptyList()) else todayRepository.observe(groupId))
+            .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), null)
 
-    @OptIn(ExperimentalCoroutinesApi::class)
-    val race: StateFlow<RaceCardState?> = group
-        .filterNotNull()
-        .map { Triple(it.goalType, it.trackId, it.members) to (it.createdBy == currentUid) }
-        .distinctUntilChanged()
-        .flatMapLatest { (info, creator) ->
-            val (goal, trackId, members) = info
-            when {
-                !TrackRepository.goalHasTracks(goal) -> flowOf(RaceCardState(false, creator, null, emptyList()))
-                trackId.isEmpty() -> flowOf(RaceCardState(true, creator, null, emptyList()))
-                else -> combine(
-                    flow { emit(trackRepository.get(trackId)) },
-                    raceRepository.observeMembers(members),
-                    raceRepository.observeCompletedKeys(members)
-                ) { track, memberInfo, keys ->
-                    val standings = if (track == null) emptyList() else {
-                        val byUid = memberInfo.associateBy { it.uid }
-                        TrackProgress.race(track, keys, members)
-                            .mapNotNull { p -> byUid[p.uid]?.let { RaceStanding(it, p, it.uid == currentUid) } }
-                    }
-                    RaceCardState(true, creator, track, standings)
-                }
+    init {
+        // Photos are same-day only: clear my earlier ones from this group.
+        if (groupId.isNotEmpty()) viewModelScope.launch { proofRepository.deleteMyOldProofs(groupId) }
+    }
+
+    suspend fun loadPhoto(logId: String): Bitmap? = proofRepository.load(groupId, logId)
+
+    /** ✓ / 🤨 on a friend's log; null removes your reaction. */
+    fun react(item: TodayLog, kind: String?) {
+        viewModelScope.launch {
+            todayRepository.react(groupId, item.log, kind).onFailure {
+                _events.trySend(GroupFeedEvent.Message(it.message ?: "Couldn't react", isError = true))
             }
         }
-        .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), null)
+    }
 
-    /** Members' LeetCode totals, read live from LeetCode for the race card. */
-    @OptIn(ExperimentalCoroutinesApi::class)
-    val leetCodeTotals: StateFlow<Map<String, Int>> = race
-        .map { state -> state?.standings?.mapNotNull { s -> s.member.leetcodeUsername?.let { s.member.uid to it } }.orEmpty() }
-        .distinctUntilChanged()
-        .mapLatest { handles -> if (handles.isEmpty()) emptyMap() else LeetCodeRepository(getApplication()).totals(handles) }
-        .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), emptyMap())
-
-    suspend fun tracksForGroup(): List<Track> =
-        group.value?.goalType?.let { trackRepository.forGoal(it) }.orEmpty()
-
-    fun setTrack(trackId: String) {
+    /** Creator only (enforced by the security rules). */
+    fun setProofMode(mode: String) {
         viewModelScope.launch {
-            groupManagementRepository.setTrack(groupId, trackId).onFailure {
-                _events.trySend(GroupFeedEvent.Message(it.message ?: "Couldn't change the track", isError = true))
+            groupManagementRepository.setProofMode(groupId, mode).onFailure {
+                _events.trySend(GroupFeedEvent.Message(it.message ?: "Couldn't change photo proof", isError = true))
+            }
+        }
+    }
+
+    /** Creator only (enforced by the security rules). */
+    fun setMetric(metric: String) {
+        viewModelScope.launch {
+            groupManagementRepository.setMetric(groupId, metric).onFailure {
+                _events.trySend(GroupFeedEvent.Message(it.message ?: "Couldn't change the leaderboard", isError = true))
             }
         }
     }
@@ -141,10 +130,16 @@ class GroupFeedViewModel(app: Application, savedStateHandle: SavedStateHandle) :
      * Logging must finish even if the user leaves the screen right away,
      * so the write runs in a NonCancellable context.
      */
-    fun writeLog(targetGroupId: String, hours: Double, note: String) {
+    fun writeLog(
+        targetGroupId: String,
+        hours: Double,
+        note: String,
+        source: String,
+        photo: ByteArray? = null
+    ) {
         viewModelScope.launch {
             val result = withContext(NonCancellable) {
-                logRepository.writeLog(targetGroupId, hours, note)
+                logRepository.writeLog(targetGroupId, hours, note, source, photo)
             }
             if (result.isFailure) {
                 _events.trySend(GroupFeedEvent.Message(

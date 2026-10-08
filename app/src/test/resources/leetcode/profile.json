@@ -3,7 +3,8 @@
   "matchedUser": {
    "username": "sample_user",
    "profile": {
-    "ranking": 123456
+    "ranking": 123456,
+    "aboutMe": "Grinding DSA | tether-abc123"
    },
    "submitStatsGlobal": {
     "acSubmissionNum": [

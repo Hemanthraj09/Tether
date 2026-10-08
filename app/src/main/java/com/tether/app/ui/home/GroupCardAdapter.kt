@@ -50,6 +50,9 @@ class GroupCardAdapter(
             .lowercase()) {
             "gym" -> R.drawable.ic_fitness
             "coding" -> R.drawable.ic_code
+            "reading" -> R.drawable.ic_bookmark
+            "work" -> R.drawable.ic_work
+            "habits" -> R.drawable.ic_check
             "other" -> R.drawable.ic_sparkle
             else -> R.drawable.ic_book
         }

@@ -12,7 +12,10 @@ import androidx.lifecycle.lifecycleScope
 import androidx.lifecycle.repeatOnLifecycle
 import androidx.recyclerview.widget.LinearLayoutManager
 import com.tether.app.R
+import com.tether.app.data.repository.LeaderboardEntry
 import com.tether.app.databinding.FragmentLeaderboardBinding
+import com.tether.app.ui.common.SheetOption
+import com.tether.app.ui.common.TetherSheet
 import com.tether.app.utils.TetherToast
 import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.launch
@@ -86,11 +89,17 @@ class LeaderboardFragment : Fragment() {
     }
 
     private fun render(
-        entries: List<com.tether.app.data.repository.LeaderboardEntry>,
+        entries: List<LeaderboardEntry>,
         weekly: Boolean
     ) {
-        val sorted = if (weekly) entries.sortedByDescending { it.hours }
-            else entries.sortedByDescending { it.todayHours }
+        // Coding groups may rank by verified LeetCode solves (hours break ties).
+        val bySolves = entries.any { it.rankedBySolves }
+        val sorted = when {
+            bySolves && weekly -> entries.sortedWith(compareByDescending<LeaderboardEntry> { it.solvedWeek ?: 0 }.thenByDescending { it.hours })
+            bySolves -> entries.sortedWith(compareByDescending<LeaderboardEntry> { it.solvedToday ?: 0 }.thenByDescending { it.todayHours })
+            weekly -> entries.sortedByDescending { it.hours }
+            else -> entries.sortedByDescending { it.todayHours }
+        }
         adapter.submitList(sorted.toLeaderboardItems(weekly))
     }
 
@@ -107,12 +116,16 @@ class LeaderboardFragment : Fragment() {
     private fun showGroupPicker() {
         val groups = viewModel.groups.value ?: return
         if (groups.size <= 1) return
-        android.app.AlertDialog.Builder(requireContext())
-            .setTitle("Switch Group")
-            .setItems(groups.map { it.name }.toTypedArray()) { _, which ->
-                viewModel.selectGroup(groups[which].id)
+        val current = viewModel.currentGroup.value?.id
+        TetherSheet.show(
+            requireContext(),
+            title = "Switch group",
+            options = groups.map { group ->
+                val count = group.members.size
+                SheetOption(group.name, "${group.goalType} • $count member" + if (count != 1) "s" else "",
+                    icon = R.drawable.ic_group, selected = group.id == current) { viewModel.selectGroup(group.id) }
             }
-            .show()
+        )
     }
 
     override fun onDestroyView() {

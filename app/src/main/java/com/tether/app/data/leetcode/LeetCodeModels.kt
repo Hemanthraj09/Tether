@@ -11,7 +11,9 @@ data class LeetCodeProfile(
     val streak: Int,
     val activeDays: Int,
     /** Topics with at least one solve, most-solved first. */
-    val topics: List<TopicCount>
+    val topics: List<TopicCount>,
+    /** Public bio ("Summary"), used for ownership verification. */
+    val aboutMe: String = ""
 )
 
 data class TopicCount(val name: String, val solved: Int)

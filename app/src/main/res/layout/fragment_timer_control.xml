@@ -1,81 +1,86 @@
 <?xml version="1.0" encoding="utf-8"?>
-<androidx.constraintlayout.widget.ConstraintLayout xmlns:android="http://schemas.android.com/apk/res/android"
-    xmlns:app="http://schemas.android.com/apk/res-auto"
+<!-- Running session: phase, live time, breaks (stopwatch) and Stop. -->
+<LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
     android:layout_width="match_parent"
     android:layout_height="wrap_content"
-    android:background="@color/colorBackground"
-    android:padding="24dp">
+    android:gravity="center_horizontal"
+    android:orientation="vertical"
+    android:paddingHorizontal="24dp"
+    android:paddingBottom="24dp">
+
+    <View
+        android:layout_width="40dp"
+        android:layout_height="4dp"
+        android:layout_marginTop="12dp"
+        android:background="@drawable/bg_drag_handle" />
 
     <TextView
         android:id="@+id/tvPhaseLabel"
         android:layout_width="wrap_content"
         android:layout_height="wrap_content"
+        android:layout_marginTop="24dp"
+        android:background="@drawable/bg_icon_container_accent"
+        android:paddingHorizontal="14dp"
+        android:paddingVertical="5dp"
         android:text="Focusing"
         android:textColor="@color/colorAccent"
-        android:textSize="18sp"
-        android:textStyle="bold"
-        app:layout_constraintBottom_toTopOf="@+id/tvTimerDisplay"
-        app:layout_constraintEnd_toEndOf="parent"
-        app:layout_constraintStart_toStartOf="parent"
-        app:layout_constraintTop_toTopOf="parent"
-        app:layout_constraintVertical_chainStyle="packed" />
+        android:textSize="14sp"
+        android:textStyle="bold" />
 
     <TextView
         android:id="@+id/tvTimerDisplay"
         android:layout_width="wrap_content"
         android:layout_height="wrap_content"
-        android:layout_marginTop="16dp"
+        android:layout_marginTop="12dp"
+        android:fontFamily="sans-serif-light"
         android:text="00:00"
         android:textColor="@color/colorTextPrimary"
-        android:textSize="64sp"
-        android:textStyle="bold"
-        app:layout_constraintBottom_toTopOf="@+id/layoutBreakOptions"
-        app:layout_constraintEnd_toEndOf="parent"
-        app:layout_constraintStart_toStartOf="parent"
-        app:layout_constraintTop_toBottomOf="@+id/tvPhaseLabel" />
-
-    <Button
-        android:id="@+id/btnStop"
-        android:layout_width="0dp"
-        android:layout_height="56dp"
-        android:layout_marginBottom="16dp"
-        android:backgroundTint="#EF4444"
-        android:text="Stop Session"
-        android:textColor="@color/colorTextPrimary"
-        app:layout_constraintBottom_toBottomOf="parent"
-        app:layout_constraintEnd_toEndOf="parent"
-        app:layout_constraintStart_toStartOf="parent" />
+        android:textSize="64sp" />
 
     <LinearLayout
         android:id="@+id/layoutBreakOptions"
         android:layout_width="match_parent"
         android:layout_height="wrap_content"
-        android:layout_marginTop="16dp"
-        android:layout_marginBottom="16dp"
-        android:orientation="horizontal"
-        app:layout_constraintBottom_toTopOf="@+id/btnStop"
-        app:layout_constraintEnd_toEndOf="parent"
-        app:layout_constraintStart_toStartOf="parent">
+        android:layout_marginTop="24dp"
+        android:orientation="horizontal">
 
-        <Button
+        <android.widget.Button
             android:id="@+id/btnBreak5"
             android:layout_width="0dp"
-            android:layout_height="56dp"
-            android:layout_marginEnd="8dp"
+            android:layout_height="52dp"
+            android:layout_marginEnd="6dp"
             android:layout_weight="1"
-            android:backgroundTint="@color/elevated"
-            android:text="5m Break"
-            android:textColor="@color/colorTextPrimary" />
+            android:background="@drawable/bg_button_secondary"
+            android:stateListAnimator="@null"
+            android:text="5 min break"
+            android:textAllCaps="false"
+            android:textColor="@color/colorTextPrimary"
+            android:textSize="15sp" />
 
-        <Button
+        <android.widget.Button
             android:id="@+id/btnBreak10"
             android:layout_width="0dp"
-            android:layout_height="56dp"
-            android:layout_marginStart="8dp"
+            android:layout_height="52dp"
+            android:layout_marginStart="6dp"
             android:layout_weight="1"
-            android:backgroundTint="@color/elevated"
-            android:text="10m Break"
-            android:textColor="@color/colorTextPrimary" />
+            android:background="@drawable/bg_button_secondary"
+            android:stateListAnimator="@null"
+            android:text="10 min break"
+            android:textAllCaps="false"
+            android:textColor="@color/colorTextPrimary"
+            android:textSize="15sp" />
     </LinearLayout>
 
-</androidx.constraintlayout.widget.ConstraintLayout>
+    <android.widget.Button
+        android:id="@+id/btnStop"
+        android:layout_width="match_parent"
+        android:layout_height="52dp"
+        android:layout_marginTop="12dp"
+        android:background="@drawable/bg_button_danger"
+        android:stateListAnimator="@null"
+        android:text="Stop session"
+        android:textAllCaps="false"
+        android:textColor="@color/colorTextPrimary"
+        android:textSize="15sp"
+        android:textStyle="bold" />
+</LinearLayout>

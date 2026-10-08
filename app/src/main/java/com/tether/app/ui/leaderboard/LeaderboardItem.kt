@@ -13,10 +13,15 @@ data class LeaderboardItem(
     val isCurrentUser: Boolean,
     val paceLabel: String = "",
     val uid: String = "",
-    val hasNudgedToday: Boolean = false
+    val hasNudgedToday: Boolean = false,
+    /** Coding groups only: problems solved in the shown period (null elsewhere). */
+    val solves: Int? = null,
+    val solvesPeriod: String = "today",
+    val rankedBySolves: Boolean = false,
+    val leetcodeNote: String = ""
 )
 
-/** Converts ranked entries to rows. [weekly] shows weekly hours and hides pace. */
+/** Converts ranked entries to rows. [weekly] shows weekly hours/solves and hides pace. */
 fun List<LeaderboardEntry>.toLeaderboardItems(weekly: Boolean = false): List<LeaderboardItem> =
     mapIndexed { index, entry ->
         LeaderboardItem(
@@ -30,6 +35,10 @@ fun List<LeaderboardEntry>.toLeaderboardItems(weekly: Boolean = false): List<Lea
             isCurrentUser = entry.isCurrentUser,
             paceLabel = if (weekly) "" else entry.paceLabel,
             uid = entry.uid,
-            hasNudgedToday = entry.hasNudgedToday
+            hasNudgedToday = entry.hasNudgedToday,
+            solves = if (weekly) entry.solvedWeek else entry.solvedToday,
+            solvesPeriod = if (weekly) "this week" else "today",
+            rankedBySolves = entry.rankedBySolves,
+            leetcodeNote = entry.leetcodeNote
         )
     }

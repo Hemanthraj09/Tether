@@ -21,6 +21,13 @@ class LeetCodeParserTest {
         assertEquals(10, p.hard)
         assertEquals(7, p.streak)
         assertEquals(42, p.activeDays)
+        assertEquals("Grinding DSA | tether-abc123", p.aboutMe)
+    }
+
+    @Test
+    fun `a missing bio is an empty string, not "null"`() {
+        val body = fixture("profile.json").replace("\"Grinding DSA | tether-abc123\"", "null")
+        assertEquals("", LeetCodeParser.parseProfile(body, "sample_user").aboutMe)
     }
 
     @Test

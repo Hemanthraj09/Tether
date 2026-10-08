@@ -42,10 +42,21 @@ class LeetCodeApi(context: Context) {
         return profile
     }
 
-    /** The user's most recent accepted submissions (LeetCode exposes at most 20). */
-    suspend fun recentSolves(username: String, limit: Int = 20): List<RecentSolve> {
+    /**
+     * The user's most recent accepted submissions (LeetCode exposes at most 20).
+     * Cached for 10 minutes unless [forceRefresh] (sync always refreshes).
+     */
+    suspend fun recentSolves(username: String, limit: Int = 20, forceRefresh: Boolean = false): List<RecentSolve> {
+        val key = "${username.lowercase()}#$limit"
+        if (!forceRefresh) {
+            recentCache[key]?.let { (fetchedAt, solves) ->
+                if (System.currentTimeMillis() - fetchedAt < CACHE_MS) return solves
+            }
+        }
         val body = post(query("recent"), JSONObject().put("username", username).put("limit", limit))
-        return LeetCodeParser.parseRecentSolves(body, username)
+        val solves = LeetCodeParser.parseRecentSolves(body, username)
+        recentCache[key] = System.currentTimeMillis() to solves
+        return solves
     }
 
     private suspend fun post(query: String, variables: JSONObject): String = withContext(Dispatchers.IO) {
@@ -76,5 +87,6 @@ class LeetCodeApi(context: Context) {
         private const val ENDPOINT = "https://leetcode.com/graphql"
         private const val CACHE_MS = 10 * 60_000L
         private val profileCache = ConcurrentHashMap<String, Pair<Long, LeetCodeProfile>>()
+        private val recentCache = ConcurrentHashMap<String, Pair<Long, List<RecentSolve>>>()
     }
 }

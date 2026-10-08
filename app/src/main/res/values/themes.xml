@@ -11,6 +11,65 @@
         <item name="android:navigationBarColor">@color/colorBackground</item>
     </style>
 
+    <!-- Centred Tether dialogs (TetherDialogs): the card draws itself; the window is transparent. -->
+    <style name="TetherDialog" parent="Theme.Material3.Dark.Dialog">
+        <item name="android:windowBackground">@android:color/transparent</item>
+        <item name="android:windowNoTitle">true</item>
+        <item name="android:windowIsFloating">true</item>
+        <item name="android:backgroundDimEnabled">true</item>
+        <item name="android:backgroundDimAmount">0.65</item>
+        <item name="android:windowAnimationStyle">@style/TetherDialogAnimation</item>
+    </style>
+
+    <style name="TetherDialogAnimation">
+        <item name="android:windowEnterAnimation">@anim/dialog_in</item>
+        <item name="android:windowExitAnimation">@anim/dialog_out</item>
+    </style>
+
+    <!-- Option rows in the "start a session" dialog. -->
+    <style name="TimerOptionRow">
+        <item name="android:layout_width">match_parent</item>
+        <item name="android:layout_height">wrap_content</item>
+        <item name="android:minHeight">68dp</item>
+        <item name="android:orientation">horizontal</item>
+        <item name="android:gravity">center_vertical</item>
+        <item name="android:padding">14dp</item>
+        <item name="android:background">@drawable/bg_input_field</item>
+        <item name="android:foreground">?attr/selectableItemBackground</item>
+        <item name="android:clickable">true</item>
+        <item name="android:focusable">true</item>
+    </style>
+
+    <style name="TimerOptionIcon">
+        <item name="android:layout_width">40dp</item>
+        <item name="android:layout_height">40dp</item>
+        <item name="android:background">@drawable/bg_icon_container_accent</item>
+    </style>
+
+    <style name="TimerOptionText">
+        <item name="android:layout_width">0dp</item>
+        <item name="android:layout_height">wrap_content</item>
+        <item name="android:layout_weight">1</item>
+        <item name="android:layout_marginStart">14dp</item>
+        <item name="android:orientation">vertical</item>
+    </style>
+
+    <style name="TimerOptionTitle">
+        <item name="android:layout_width">wrap_content</item>
+        <item name="android:layout_height">wrap_content</item>
+        <item name="android:textColor">@color/colorTextPrimary</item>
+        <item name="android:textSize">15sp</item>
+        <item name="android:textStyle">bold</item>
+    </style>
+
+    <style name="TimerOptionDescription">
+        <item name="android:layout_width">wrap_content</item>
+        <item name="android:layout_height">wrap_content</item>
+        <item name="android:layout_marginTop">2dp</item>
+        <item name="android:textColor">@color/colorTextSecondary</item>
+        <item name="android:textSize">12sp</item>
+    </style>
+
     <style name="BottomSheetDialogTheme" parent="Theme.Material3.Dark.BottomSheetDialog">
         <item name="bottomSheetStyle">@style/BottomSheetStyle</item>
     </style>
@@ -49,18 +108,5 @@
 
     <style name="BottomNavTextStyle" parent="TextAppearance.Material3.LabelMedium">
         <item name="android:textSize">10sp</item>
-    </style>
-
-    <!-- Tiny initials avatar showing which group members completed a track item -->
-    <style name="SolverDot">
-        <item name="android:layout_width">18dp</item>
-        <item name="android:layout_height">18dp</item>
-        <item name="android:layout_marginEnd">-4dp</item>
-        <item name="android:background">@drawable/bg_avatar_circle</item>
-        <item name="android:gravity">center</item>
-        <item name="android:textColor">@color/colorTextPrimary</item>
-        <item name="android:textSize">8sp</item>
-        <item name="android:textStyle">bold</item>
-        <item name="android:visibility">gone</item>
     </style>
 </resources>

@@ -13,8 +13,8 @@
     <string name="log_progress">Log Progress</string>
     <string name="log_it">Log It</string>
     <string name="time_spent">Time Spent</string>
-    <string name="add_note">What did you accomplish?</string>
-    <string name="note_hint">Add a note...</string>
+    <string name="add_note">What did you do?</string>
+    <string name="note_hint">e.g. Solved 3 graph problems, revised OS notes</string>
     <string name="leaderboard">Leaderboard</string>
     <string name="this_week">This Week</string>
     <string name="today">Today</string>
@@ -29,6 +29,9 @@
     <string name="goal_gym">Gym</string>
     <string name="goal_coding">Coding</string>
     <string name="goal_other">Other</string>
+    <string name="goal_reading">Reading</string>
+    <string name="goal_work">Work</string>
+    <string name="goal_habits">Habits</string>
     <string name="day_streak">day streak</string>
     <string name="join_group_btn">Join Group</string>
     <string name="create_group_btn">Create Group</string>
@@ -47,5 +50,5 @@
     <string name="no_group_yet">No Group Yet</string>
     <string name="no_group_subtitle">Join or create a group to start tracking your progress with friends.</string>
     <string name="join_or_create">Join or Create a Group</string>
-    <string name="log_note_hint">What did you work on today?</string>
+    <string name="log_note_hint">What did you do? (required)</string>
 </resources>

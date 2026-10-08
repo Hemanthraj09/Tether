@@ -373,11 +373,111 @@
                                 app:layout_constraintTop_toTopOf="parent" />
                         </androidx.constraintlayout.widget.ConstraintLayout>
 
+                        <!-- Goal button 5 -->
+                        <androidx.constraintlayout.widget.ConstraintLayout
+                            android:id="@+id/btnGoalReading"
+                            android:layout_width="0dp"
+                            android:layout_height="48dp"
+                            android:layout_columnWeight="1"
+                            android:layout_margin="4dp"
+                            android:background="@drawable/bg_goal_unselected"
+                            android:clickable="true"
+                            android:focusable="true">
+
+                            <ImageView
+                                android:layout_width="16dp"
+                                android:layout_height="16dp"
+                                android:layout_marginStart="12dp"
+                                android:src="@drawable/ic_bookmark"
+                                app:layout_constraintBottom_toBottomOf="parent"
+                                app:layout_constraintStart_toStartOf="parent"
+                                app:layout_constraintTop_toTopOf="parent"
+                                app:tint="@color/colorTextSecondary" />
+
+                            <TextView
+                                android:layout_width="wrap_content"
+                                android:layout_height="wrap_content"
+                                android:layout_marginStart="36dp"
+                                android:text="@string/goal_reading"
+                                android:textColor="@color/colorTextSecondary"
+                                android:textSize="13sp"
+                                app:layout_constraintBottom_toBottomOf="parent"
+                                app:layout_constraintStart_toStartOf="parent"
+                                app:layout_constraintTop_toTopOf="parent" />
+                        </androidx.constraintlayout.widget.ConstraintLayout>
+
+                        <!-- Goal button 6 -->
+                        <androidx.constraintlayout.widget.ConstraintLayout
+                            android:id="@+id/btnGoalWork"
+                            android:layout_width="0dp"
+                            android:layout_height="48dp"
+                            android:layout_columnWeight="1"
+                            android:layout_margin="4dp"
+                            android:background="@drawable/bg_goal_unselected"
+                            android:clickable="true"
+                            android:focusable="true">
+
+                            <ImageView
+                                android:layout_width="16dp"
+                                android:layout_height="16dp"
+                                android:layout_marginStart="12dp"
+                                android:src="@drawable/ic_work"
+                                app:layout_constraintBottom_toBottomOf="parent"
+                                app:layout_constraintStart_toStartOf="parent"
+                                app:layout_constraintTop_toTopOf="parent"
+                                app:tint="@color/colorTextSecondary" />
+
+                            <TextView
+                                android:layout_width="wrap_content"
+                                android:layout_height="wrap_content"
+                                android:layout_marginStart="36dp"
+                                android:text="@string/goal_work"
+                                android:textColor="@color/colorTextSecondary"
+                                android:textSize="13sp"
+                                app:layout_constraintBottom_toBottomOf="parent"
+                                app:layout_constraintStart_toStartOf="parent"
+                                app:layout_constraintTop_toTopOf="parent" />
+                        </androidx.constraintlayout.widget.ConstraintLayout>
+
+                        <!-- Goal button 7 -->
+                        <androidx.constraintlayout.widget.ConstraintLayout
+                            android:id="@+id/btnGoalHabits"
+                            android:layout_width="0dp"
+                            android:layout_height="48dp"
+                            android:layout_columnWeight="1"
+                            android:layout_margin="4dp"
+                            android:background="@drawable/bg_goal_unselected"
+                            android:clickable="true"
+                            android:focusable="true">
+
+                            <ImageView
+                                android:layout_width="16dp"
+                                android:layout_height="16dp"
+                                android:layout_marginStart="12dp"
+                                android:src="@drawable/ic_check"
+                                app:layout_constraintBottom_toBottomOf="parent"
+                                app:layout_constraintStart_toStartOf="parent"
+                                app:layout_constraintTop_toTopOf="parent"
+                                app:tint="@color/colorTextSecondary" />
+
+                            <TextView
+                                android:layout_width="wrap_content"
+                                android:layout_height="wrap_content"
+                                android:layout_marginStart="36dp"
+                                android:text="@string/goal_habits"
+                                android:textColor="@color/colorTextSecondary"
+                                android:textSize="13sp"
+                                app:layout_constraintBottom_toBottomOf="parent"
+                                app:layout_constraintStart_toStartOf="parent"
+                                app:layout_constraintTop_toTopOf="parent" />
+                        </androidx.constraintlayout.widget.ConstraintLayout>
+
                         <!-- Goal button 4 -->
                         <androidx.constraintlayout.widget.ConstraintLayout
                             android:id="@+id/btnGoalOther"
                             android:layout_width="0dp"
                             android:layout_height="48dp"
+                            android:layout_columnSpan="2"
                             android:layout_columnWeight="1"
                             android:layout_margin="4dp"
                             android:background="@drawable/bg_goal_unselected"

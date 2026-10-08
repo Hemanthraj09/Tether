@@ -1,14 +1,18 @@
 rules_version = '2';
 
-// Tether Firestore security rules.
+// Tether Firestore security rules (v1.2.1, hardened).
 //
 // Every rule mirrors a real access path in the app (see docs/IMPLEMENTATION.md)
-// and is covered by emulator tests in firestore-tests/rules.test.js.
+// and is covered by emulator tests in firestore-tests/rules.test.js, including
+// one test per loophole found in the Oct 2026 audit.
+//
 // Principles:
-//  - you can only write data about yourself (your user doc, your hours,
-//    your streak, nudges you send),
-//  - group-scoped writes require membership,
-//  - leaderboard counters can only go up by a sane amount (≤ 24h per write).
+//  - you only write data about yourself,
+//  - group data (logs, stats, nudges) is visible to members only,
+//  - groups can't be listed or discovered; joining needs the invite code,
+//  - leaderboard numbers must be backed by a real log, capped at 24h/day and
+//    168h/week, and dated "today" by the server's clock,
+//  - streaks can only move in valid steps (+1 for a consecutive day, or reset).
 service cloud.firestore {
   match /databases/{database}/documents {
 
@@ -26,6 +30,14 @@ service cloud.firestore {
       return /databases/$(database)/documents/groups/$(groupId);
     }
 
+    function logPath(logId) {
+      return /databases/$(database)/documents/logs/$(logId);
+    }
+
+    function proofPath(groupId, logId) {
+      return /databases/$(database)/documents/groupStats/$(groupId)/proofs/$(logId);
+    }
+
     function isMember(groupId) {
       return signedIn()
         && exists(groupPath(groupId))
@@ -39,84 +51,163 @@ service cloud.firestore {
         : request.resource.data.diff(resource.data).affectedKeys();
     }
 
-    // Stats docs are maps of uid → hours. A user may only raise their own value.
-    function onlyOwnHoursIncrease() {
+    // "yyyy-MM-dd" → timestamp at midnight UTC.
+    function dayOf(d) {
+      return timestamp.date(int(d[0:4]), int(d[5:7]), int(d[8:10]));
+    }
+
+    function isDateString(d) {
+      return d is string && d.matches('^[0-9]{4}-[0-9]{2}-[0-9]{2}$');
+    }
+
+    // A calendar date that is "today" somewhere between UTC-9 and UTC+14 by the
+    // server's clock, so a phone with a wrong date can't backfill days.
+    function isAroundToday(d) {
+      return isDateString(d)
+        && dayOf(d) <= request.time + duration.value(15, 'h')
+        && dayOf(d) >= request.time - duration.value(39, 'h');
+    }
+
+    // Stats docs hold uid → hours, plus "log_<uid>" → id of the log that justified
+    // the latest increase. Each increase must equal a log created in the same batch.
+    function statsIncreaseBackedByLog(groupId, cap) {
       let before = resource == null ? 0 : resource.data.get(me(), 0);
       let after = request.resource.data.get(me(), 0);
-      return changedKeys().hasOnly([me()])
+      let logKey = 'log_' + me();
+      let logId = request.resource.data.get(logKey, '');
+      return changedKeys().hasOnly([me(), logKey])
         && after is number
-        && after >= before
-        && after - before <= 24;
+        && after > before
+        && after <= cap
+        && logId is string
+        && logId.size() > 0
+        && !exists(logPath(logId))
+        && getAfter(logPath(logId)).data.userId == me()
+        && getAfter(logPath(logId)).data.groupId == groupId
+        && math.abs((after - before) - getAfter(logPath(logId)).data.value) < 0.001;
+    }
+
+    // Streak moves: same day → unchanged; consecutive day → +1; otherwise → 1.
+    function isValidStreak() {
+      let n = request.resource.data;
+      let oldCurrent = resource == null ? 0 : resource.data.get('currentStreak', 0);
+      let oldLongest = resource == null ? 0 : resource.data.get('longestStreak', 0);
+      let oldDate = resource == null ? '' : resource.data.get('lastLogDate', '');
+      return n.keys().hasOnly(['currentStreak', 'longestStreak', 'lastLogDate'])
+        && n.currentStreak is int
+        && n.longestStreak is int
+        && isAroundToday(n.lastLogDate)
+        && n.longestStreak >= n.currentStreak
+        && n.longestStreak <= (oldLongest > n.currentStreak ? oldLongest : n.currentStreak)
+        && (
+          (n.lastLogDate == oldDate && (n.currentStreak == oldCurrent || (oldCurrent == 0 && n.currentStreak == 1)))
+          || (n.lastLogDate > oldDate && n.currentStreak == 1)
+          || (isDateString(oldDate)
+              && dayOf(n.lastLogDate) == dayOf(oldDate) + duration.value(1, 'd')
+              && n.currentStreak == oldCurrent + 1)
+        );
     }
 
     // ── users/{uid} ────────────────────────────────────────────
-    // Readable by any signed-in user (names on leaderboards); writable by owner.
+    // Public profile: display name, totals, LeetCode handle, focus areas.
+    // Emails and group memberships are deliberately NOT stored here.
     match /users/{userId} {
       allow read: if signedIn();
 
       allow create: if signedIn() && me() == userId
-        && request.resource.data.keys().hasOnly(
-             ['uid', 'name', 'email', 'groupIds', 'totalHours',
-              // written by app versions before May 2026
-              'currentStreak', 'longestStreak', 'lastLogDate']);
+        && request.resource.data.keys().hasOnly(['uid', 'name', 'totalHours', 'interests', 'targets', 'stage'])
+        && request.resource.data.name is string;
 
+      // Legacy fields (email, groupIds) may only be removed, never written.
       allow update: if signedIn() && me() == userId
-        && changedKeys().hasOnly(['uid', 'name', 'email', 'groupIds', 'totalHours', 'leetcodeUsername'])
+        && changedKeys().hasOnly(['uid', 'name', 'totalHours', 'leetcodeUsername',
+                                  'interests', 'targets', 'stage', 'email', 'groupIds'])
+        && !('email' in request.resource.data && 'email' in changedKeys())
+        && !('groupIds' in request.resource.data && 'groupIds' in changedKeys())
         && (!('totalHours' in request.resource.data) || request.resource.data.totalHours is number)
-        && (!('leetcodeUsername' in request.resource.data) || request.resource.data.leetcodeUsername is string);
+        && (!('leetcodeUsername' in request.resource.data) || request.resource.data.leetcodeUsername is string)
+        && (!('interests' in request.resource.data)
+            || (request.resource.data.interests is list && request.resource.data.interests.size() <= 8))
+        && (!('targets' in request.resource.data)
+            || (request.resource.data.targets is map && request.resource.data.targets.size() <= 8));
 
-      allow delete: if false;
+      allow delete: if signedIn() && me() == userId;
 
-      // Completed track items: synced from LeetCode ("leetcode") or ticked by hand ("self").
-      // Readable by signed-in users (group races); only the owner writes.
+      // Accepted LeetCode solves, written by the owner's sync (key == problem slug).
+      // Readable by signed-in users so group members can count and cross-check them.
       match /completions/{key} {
         allow read: if signedIn();
         allow create, update: if signedIn() && me() == userId
           && request.resource.data.keys().hasOnly(
                ['key', 'title', 'slug', 'source', 'completedAt', 'syncedAt', 'userName'])
           && request.resource.data.key == key
-          && request.resource.data.source in ['leetcode', 'self']
+          && request.resource.data.source == 'leetcode'
+          && request.resource.data.get('slug', '') == key
           && request.resource.data.completedAt is number
           && request.resource.data.syncedAt is number;
         allow delete: if signedIn() && me() == userId;
       }
+
+      // One-document index of all completions (key → {s: source, t: completedAt}),
+      // so a group reads 1 document per member instead of hundreds.
+      match /meta/{docId} {
+        allow read: if signedIn();
+        allow write: if signedIn() && me() == userId;
+      }
+
+      // Personal heatmap: one doc per year, "yyyy-MM-dd" → hours. Owner only.
+      match /heatmap/{year} {
+        allow read, write: if signedIn() && me() == userId;
+      }
     }
 
-    // ── leetcodeUsernames/{lowercaseHandle} ────────────────────
-    // One Tether account per LeetCode handle. Claims can't be edited, only released.
-    match /leetcodeUsernames/{handle} {
-      allow read: if signedIn();
+    // ── inviteCodes/{code} ─────────────────────────────────────
+    // The only way to find a group: fetch one code you were given. Never listable.
+    match /inviteCodes/{code} {
+      allow get: if signedIn();
+      allow list: if false;
+
       allow create: if signedIn()
-        && request.resource.data.keys().hasOnly(['uid', 'username'])
-        && request.resource.data.uid == me()
-        && request.resource.data.username is string
-        && request.resource.data.username.lower() == handle;
+        && request.resource.data.keys().hasOnly(['groupId', 'createdBy'])
+        && getAfter(groupPath(request.resource.data.groupId)).data.inviteCode == code
+        && getAfter(groupPath(request.resource.data.groupId)).data.createdBy == request.resource.data.createdBy
+        && me() in getAfter(groupPath(request.resource.data.groupId)).data.members;
+
       allow update: if false;
-      allow delete: if signedIn() && resource.data.uid == me();
+
+      allow delete: if signedIn() && (
+        resource.data.createdBy == me()
+        || (exists(groupPath(resource.data.groupId))
+            && get(groupPath(resource.data.groupId)).data.createdBy == me())
+      );
     }
 
     // ── groups/{groupId} ───────────────────────────────────────
     match /groups/{groupId} {
-      // Joining looks a group up by invite code before you're a member.
-      allow read: if signedIn();
+      // Fetching by id is allowed (ids are random and only reachable through an
+      // invite code or membership); listing only returns groups you belong to.
+      allow get: if signedIn();
+      allow list: if signedIn() && me() in resource.data.members;
 
       allow create: if signedIn()
         && request.resource.data.id == groupId
         && request.resource.data.createdBy == me()
-        && request.resource.data.get('trackId', '') == ''
+        && request.resource.data.get('metric', 'hours') == 'hours'
+        && request.resource.data.get('proof', 'optional') in ['off', 'optional', 'required']
         && request.resource.data.members == [me()]
         && request.resource.data.name is string
         && request.resource.data.name.size() > 0
         && request.resource.data.name.size() <= 60;
 
-      // Edits the app makes: someone adds or removes *themselves*,
-      // or the creator picks the group's track.
       allow update: if signedIn() && (
         (changedKeys().hasOnly(['members']) && (isJoining() || isLeaving()))
-        || (changedKeys().hasOnly(['trackId'])
+        || (changedKeys().hasOnly(['members', 'createdBy']) && isCreatorHandingOver())
+        || (changedKeys().hasOnly(['metric'])
             && resource.data.createdBy == me()
-            && request.resource.data.trackId is string
-            && request.resource.data.trackId.size() <= 40)
+            && request.resource.data.metric in ['hours', 'solves'])
+        || (changedKeys().hasOnly(['proof'])
+            && resource.data.createdBy == me()
+            && request.resource.data.proof in ['off', 'optional', 'required'])
       );
 
       allow delete: if signedIn() && resource.data.createdBy == me();
@@ -132,21 +223,36 @@ service cloud.firestore {
           && resource.data.inviteCode != '';   // solo groups can't be joined
       }
 
+      // Members leave by removing themselves. The creator can't just leave
+      // (that would orphan the group); they hand over or delete instead.
       function isLeaving() {
         let before = resource.data.members;
         let after = request.resource.data.members;
         return me() in before
           && !(me() in after)
           && before.hasAll(after)
-          && after.size() == before.size() - 1;
+          && after.size() == before.size() - 1
+          && resource.data.createdBy != me();
+      }
+
+      // Creator leaves (e.g. deleting their account) and passes the group on.
+      function isCreatorHandingOver() {
+        let before = resource.data.members;
+        let after = request.resource.data.members;
+        return resource.data.createdBy == me()
+          && me() in before
+          && !(me() in after)
+          && before.hasAll(after)
+          && after.size() == before.size() - 1
+          && request.resource.data.createdBy in after;
       }
     }
 
     // ── logs/{logId} ───────────────────────────────────────────
     match /logs/{logId} {
-      // Group activity + your own heatmap. (Logs of groups you've left stay
-      // part of your history, so reads aren't limited to current members.)
-      allow read: if signedIn();
+      // Your own logs (heatmap history) and logs of groups you're in.
+      allow read: if signedIn()
+        && (resource.data.userId == me() || isMember(resource.data.groupId));
 
       allow create: if signedIn()
         && request.resource.data.userId == me()
@@ -154,35 +260,98 @@ service cloud.firestore {
         && request.resource.data.value is number
         && request.resource.data.value >= 0
         && request.resource.data.value <= 24
-        && request.resource.data.date is string;
+        && isAroundToday(request.resource.data.date)
+        && hasWhatYouDid()
+        && meetsProofRule(logId);
 
       allow update: if false;
       allow delete: if signedIn() && resource.data.userId == me();
+
+      // Real work (> 0 h) says what was done: 3-200 characters.
+      function hasWhatYouDid() {
+        let d = request.resource.data;
+        return d.value == 0
+          || (d.get('note', '') is string && d.get('note', '').size() >= 3 && d.get('note', '').size() <= 200);
+      }
+
+      // The group's photo mode, checked against the proof written in the same batch.
+      // Timer sessions are exempt from "required" (the timer measured the time).
+      function meetsProofRule(logId) {
+        let d = request.resource.data;
+        let mode = get(groupPath(d.groupId)).data.get('proof', 'optional');
+        let hasPhoto = d.get('hasPhoto', false);
+        let source = d.get('source', 'manual');
+        return hasPhoto is bool
+          && source in ['manual', 'timer', 'system']
+          && (hasPhoto == false || (mode != 'off' && existsAfter(proofPath(d.groupId, logId))))
+          && (mode != 'required' || d.value == 0 || source == 'timer' || hasPhoto == true);
+      }
     }
 
     // ── groupStats/{groupId}/... ───────────────────────────────
     match /groupStats/{groupId} {
 
       match /daily/{date} {
-        allow read: if signedIn();
-        allow write: if isMember(groupId) && onlyOwnHoursIncrease();
+        allow read: if isMember(groupId);
+        allow write: if isMember(groupId)
+          && isAroundToday(date)
+          && statsIncreaseBackedByLog(groupId, 24)
+          && getAfter(logPath(request.resource.data.get('log_' + me(), ''))).data.date == date;
       }
 
       match /weekly/{week} {
-        allow read: if signedIn();
-        allow write: if isMember(groupId) && onlyOwnHoursIncrease();
+        allow read: if isMember(groupId);
+        allow write: if isMember(groupId) && statsIncreaseBackedByLog(groupId, 168);
       }
 
       match /streaks/{userId} {
-        allow read: if signedIn();
-        allow write: if isMember(groupId) && me() == userId
-          && request.resource.data.keys().hasOnly(['currentStreak', 'longestStreak', 'lastLogDate']);
+        allow read: if isMember(groupId);
+        allow write: if isMember(groupId) && me() == userId && isValidStreak();
+      }
+
+      // Proof photos (~60 KB JPEG bytes; free alternative to Cloud Storage).
+      // Created only together with their new log, never edited, visible to
+      // members for 24 h from the server time they were taken.
+      match /proofs/{logId} {
+        allow get: if isMember(groupId)
+          && request.time < resource.data.createdAt + duration.value(24, 'h');
+        // Listing is only for cleaning up your own photos.
+        allow list: if isMember(groupId) && resource.data.uid == me();
+        allow create: if isMember(groupId)
+          && request.resource.data.keys().hasOnly(['uid', 'date', 'createdAt', 'image'])
+          && request.resource.data.uid == me()
+          && request.resource.data.createdAt == request.time
+          && request.resource.data.image is bytes
+          && request.resource.data.image.size() <= 150 * 1024
+          && !exists(logPath(logId))
+          && getAfter(logPath(logId)).data.userId == me()
+          && getAfter(logPath(logId)).data.groupId == groupId
+          && getAfter(logPath(logId)).data.get('hasPhoto', false) == true
+          && getAfter(logPath(logId)).data.date == request.resource.data.date;
+        allow update: if false;
+        allow delete: if signedIn() && resource.data.uid == me();
+      }
+
+      // ✓ / 🤨 on a friend's log. Id {logId}_{uid} → one reaction per person per log.
+      match /reactions/{reactionId} {
+        allow read: if isMember(groupId);
+        allow create, update: if isMember(groupId)
+          && request.resource.data.keys().hasOnly(['logId', 'uid', 'date', 'kind'])
+          && request.resource.data.uid == me()
+          && request.resource.data.kind in ['ok', 'doubt']
+          && reactionId == request.resource.data.logId + '_' + me()
+          && isAroundToday(request.resource.data.date)
+          && get(logPath(request.resource.data.logId)).data.groupId == groupId
+          && get(logPath(request.resource.data.logId)).data.userId != me()
+          && get(logPath(request.resource.data.logId)).data.date == request.resource.data.date;
+        allow delete: if isMember(groupId) && resource.data.uid == me();
       }
 
       // Id format {date}_{fromUid}_{toUid} → one nudge per person per day.
       match /nudges/{nudgeId} {
-        allow read: if signedIn();
+        allow read: if isMember(groupId);
         allow create, update: if isMember(groupId)
+          && isAroundToday(request.resource.data.date)
           && request.resource.data.nudgerUid == me()
           && request.resource.data.nudgedUid != me()
           && request.resource.data.nudgedUid in get(groupPath(groupId)).data.members
@@ -191,13 +360,7 @@ service cloud.firestore {
       }
     }
 
-    // ── Legacy ─────────────────────────────────────────────────
-    // Nudge path used by app versions before Oct 2026. Kept so old installs
-    // don't error; delete this block once everyone has updated.
-    match /nudges/{document=**} {
-      allow read, write: if signedIn();
-    }
-
-    // Everything else is denied by default.
+    // Everything else, including the retired leetcodeUsernames and legacy
+    // nudges collections, is denied by default.
   }
 }

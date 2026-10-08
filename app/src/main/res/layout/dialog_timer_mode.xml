@@ -1,74 +1,167 @@
 <?xml version="1.0" encoding="utf-8"?>
-<androidx.cardview.widget.CardView xmlns:android="http://schemas.android.com/apk/res/android"
+<!-- Start a focus session: Stopwatch or Pomodoro (then 25/5 or 50/10). -->
+<LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
     xmlns:app="http://schemas.android.com/apk/res-auto"
     android:layout_width="match_parent"
     android:layout_height="wrap_content"
-    app:cardBackgroundColor="@color/colorSurface"
-    app:cardCornerRadius="24dp"
-    app:cardElevation="0dp">
+    android:background="@drawable/bg_dialog"
+    android:orientation="vertical"
+    android:padding="24dp">
+
+    <TextView
+        android:id="@+id/tvModeTitle"
+        android:layout_width="wrap_content"
+        android:layout_height="wrap_content"
+        android:text="How do you want to work?"
+        android:textColor="@color/colorTextPrimary"
+        android:textSize="19sp"
+        android:textStyle="bold" />
+
+    <TextView
+        android:id="@+id/tvModeSubtitle"
+        android:layout_width="wrap_content"
+        android:layout_height="wrap_content"
+        android:layout_marginTop="4dp"
+        android:layout_marginBottom="20dp"
+        android:text="Only focus time is logged. Runs in the background."
+        android:textColor="@color/colorTextSecondary"
+        android:textSize="13sp" />
 
     <LinearLayout
+        android:id="@+id/layoutModes"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:orientation="vertical">
+
+        <LinearLayout
+            android:id="@+id/btnNormal"
+            style="@style/TimerOptionRow">
+
+            <FrameLayout style="@style/TimerOptionIcon">
+
+                <ImageView
+                    android:layout_width="20dp"
+                    android:layout_height="20dp"
+                    android:layout_gravity="center"
+                    android:importantForAccessibility="no"
+                    android:src="@drawable/ic_flame"
+                    app:tint="@color/colorAccent" />
+            </FrameLayout>
+
+            <LinearLayout style="@style/TimerOptionText">
+
+                <TextView
+                    style="@style/TimerOptionTitle"
+                    android:text="Stopwatch" />
+
+                <TextView
+                    style="@style/TimerOptionDescription"
+                    android:text="Open-ended. Take a 5 or 10 min break whenever you need." />
+            </LinearLayout>
+        </LinearLayout>
+
+        <LinearLayout
+            android:id="@+id/btnPomodoro"
+            style="@style/TimerOptionRow"
+            android:layout_marginTop="10dp">
+
+            <FrameLayout style="@style/TimerOptionIcon">
+
+                <ImageView
+                    android:layout_width="20dp"
+                    android:layout_height="20dp"
+                    android:layout_gravity="center"
+                    android:importantForAccessibility="no"
+                    android:src="@drawable/ic_sync"
+                    app:tint="@color/colorAccent" />
+            </FrameLayout>
+
+            <LinearLayout style="@style/TimerOptionText">
+
+                <TextView
+                    style="@style/TimerOptionTitle"
+                    android:text="Pomodoro" />
+
+                <TextView
+                    style="@style/TimerOptionDescription"
+                    android:text="Focus in blocks with breaks in between." />
+            </LinearLayout>
+        </LinearLayout>
+    </LinearLayout>
+
+    <LinearLayout
+        android:id="@+id/layoutPomoConfigs"
         android:layout_width="match_parent"
         android:layout_height="wrap_content"
         android:orientation="vertical"
-        android:padding="24dp">
+        android:visibility="gone">
+
+        <LinearLayout
+            android:id="@+id/btnPomo25"
+            style="@style/TimerOptionRow">
+
+            <FrameLayout style="@style/TimerOptionIcon">
+
+                <TextView
+                    android:layout_width="wrap_content"
+                    android:layout_height="wrap_content"
+                    android:layout_gravity="center"
+                    android:text="25"
+                    android:textColor="@color/colorAccent"
+                    android:textSize="15sp"
+                    android:textStyle="bold" />
+            </FrameLayout>
+
+            <LinearLayout style="@style/TimerOptionText">
+
+                <TextView
+                    style="@style/TimerOptionTitle"
+                    android:text="25 / 5" />
+
+                <TextView
+                    style="@style/TimerOptionDescription"
+                    android:text="25 min focus, 5 min break. The classic." />
+            </LinearLayout>
+        </LinearLayout>
+
+        <LinearLayout
+            android:id="@+id/btnPomo50"
+            style="@style/TimerOptionRow"
+            android:layout_marginTop="10dp">
+
+            <FrameLayout style="@style/TimerOptionIcon">
+
+                <TextView
+                    android:layout_width="wrap_content"
+                    android:layout_height="wrap_content"
+                    android:layout_gravity="center"
+                    android:text="50"
+                    android:textColor="@color/colorAccent"
+                    android:textSize="15sp"
+                    android:textStyle="bold" />
+            </FrameLayout>
+
+            <LinearLayout style="@style/TimerOptionText">
+
+                <TextView
+                    style="@style/TimerOptionTitle"
+                    android:text="50 / 10" />
+
+                <TextView
+                    style="@style/TimerOptionDescription"
+                    android:text="50 min focus, 10 min break. For deep work." />
+            </LinearLayout>
+        </LinearLayout>
 
         <TextView
+            android:id="@+id/btnPomoBack"
             android:layout_width="wrap_content"
             android:layout_height="wrap_content"
-            android:text="How do you want to work today?"
-            android:textColor="@color/colorTextPrimary"
-            android:textSize="18sp"
-            android:textStyle="bold"
-            android:layout_marginBottom="24dp" />
-
-        <LinearLayout
-            android:id="@+id/layoutModes"
-            android:layout_width="match_parent"
-            android:layout_height="wrap_content"
-            android:orientation="vertical">
-
-            <Button
-                android:id="@+id/btnNormal"
-                android:layout_width="match_parent"
-                android:layout_height="56dp"
-                android:text="Normal"
-                android:backgroundTint="@color/elevated"
-                android:textColor="@color/colorTextPrimary"
-                android:layout_marginBottom="12dp" />
-
-            <Button
-                android:id="@+id/btnPomodoro"
-                android:layout_width="match_parent"
-                android:layout_height="56dp"
-                android:text="Pomodoro"
-                android:backgroundTint="@color/elevated"
-                android:textColor="@color/colorTextPrimary" />
-        </LinearLayout>
-
-        <LinearLayout
-            android:id="@+id/layoutPomoConfigs"
-            android:layout_width="match_parent"
-            android:layout_height="wrap_content"
-            android:orientation="vertical"
-            android:visibility="gone">
-
-            <Button
-                android:id="@+id/btnPomo25"
-                android:layout_width="match_parent"
-                android:layout_height="56dp"
-                android:text="25/5"
-                android:backgroundTint="@color/elevated"
-                android:textColor="@color/colorTextPrimary"
-                android:layout_marginBottom="12dp" />
-
-            <Button
-                android:id="@+id/btnPomo50"
-                android:layout_width="match_parent"
-                android:layout_height="56dp"
-                android:text="50/10"
-                android:backgroundTint="@color/elevated"
-                android:textColor="@color/colorTextPrimary" />
-        </LinearLayout>
+            android:layout_gravity="center_horizontal"
+            android:layout_marginTop="12dp"
+            android:padding="8dp"
+            android:text="← Back"
+            android:textColor="@color/colorTextSecondary"
+            android:textSize="13sp" />
     </LinearLayout>
-</androidx.cardview.widget.CardView>
+</LinearLayout>

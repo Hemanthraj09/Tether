@@ -73,7 +73,19 @@ class LeaderboardAdapter(
             )
 
             tvStreak.text = "${item.streak} ${context.getString(R.string.day_streak)}"
-            tvHours.text = Formatters.formatHours(item.hours)
+            tvHours.text = if (item.rankedBySolves && item.solves != null) "${item.solves} 🧩"
+                           else Formatters.formatHours(item.hours)
+
+            if (item.solves != null) {
+                tvSolves.visibility = View.VISIBLE
+                tvSolves.text = buildString {
+                    append(if (item.rankedBySolves) Formatters.formatHours(item.hours) + " logged"
+                           else "🧩 ${item.solves} solved ${item.solvesPeriod}")
+                    if (item.leetcodeNote.isNotEmpty()) append(" · ").append(item.leetcodeNote)
+                }
+            } else {
+                tvSolves.visibility = View.GONE
+            }
 
             if (!item.isCurrentUser && onNudge != null) {
                 flAvatar.setOnClickListener {

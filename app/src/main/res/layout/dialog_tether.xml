@@ -1,0 +1,69 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- Centred dialog: title, message, optional content, Cancel + primary action. -->
+<LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
+    xmlns:tools="http://schemas.android.com/tools"
+    android:layout_width="match_parent"
+    android:layout_height="wrap_content"
+    android:background="@drawable/bg_dialog"
+    android:orientation="vertical"
+    android:padding="24dp">
+
+    <TextView
+        android:id="@+id/tvDialogTitle"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:textColor="@color/colorTextPrimary"
+        android:textSize="19sp"
+        android:textStyle="bold"
+        tools:text="Delete group?" />
+
+    <TextView
+        android:id="@+id/tvDialogMessage"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:layout_marginTop="8dp"
+        android:lineSpacingExtra="3dp"
+        android:textColor="@color/colorTextSecondary"
+        android:textSize="14sp"
+        tools:text="This cannot be undone." />
+
+    <FrameLayout
+        android:id="@+id/dialogContent"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:layout_marginTop="16dp"
+        android:visibility="gone" />
+
+    <LinearLayout
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:layout_marginTop="24dp"
+        android:orientation="horizontal">
+
+        <android.widget.Button
+            android:id="@+id/btnDialogCancel"
+            android:layout_width="0dp"
+            android:layout_height="48dp"
+            android:layout_weight="1"
+            android:background="@drawable/bg_button_secondary"
+            android:stateListAnimator="@null"
+            android:text="Cancel"
+            android:textAllCaps="false"
+            android:textColor="@color/colorTextPrimary"
+            android:textSize="15sp" />
+
+        <android.widget.Button
+            android:id="@+id/btnDialogConfirm"
+            android:layout_width="0dp"
+            android:layout_height="48dp"
+            android:layout_marginStart="12dp"
+            android:layout_weight="1"
+            android:background="@drawable/bg_button_primary"
+            android:stateListAnimator="@null"
+            android:textAllCaps="false"
+            android:textColor="@color/colorTextPrimary"
+            android:textSize="15sp"
+            android:textStyle="bold"
+            tools:text="Delete" />
+    </LinearLayout>
+</LinearLayout>

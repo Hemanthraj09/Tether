@@ -7,6 +7,8 @@ import com.tether.app.data.leetcode.LeetCodeProfile
 import com.tether.app.data.leetcode.LeetCodeSyncState
 import com.tether.app.data.repository.LeetCodeRepository
 import com.tether.app.sync.LeetCodeSyncWorker
+import com.tether.app.domain.LeetCodeVerification
+import com.google.firebase.auth.FirebaseAuth
 import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.channels.Channel
 import kotlinx.coroutines.flow.Flow
@@ -29,13 +31,19 @@ sealed class LeetCodeCardState {
         val username: String,
         val profile: LeetCodeProfile?,   // null while loading or if LeetCode is unreachable
         val lastSyncAt: Long,
-        val syncError: String?
+        val syncError: String?,
+        /** Whether the public LeetCode bio contains this user's ownership code. */
+        val ownershipVerified: Boolean
     ) : LeetCodeCardState()
 }
 
 class ConnectedAccountsViewModel(app: Application) : AndroidViewModel(app) {
 
     private val repository = LeetCodeRepository(app)
+    private val myUid = FirebaseAuth.getInstance().currentUser?.uid
+
+    /** The code to paste into the LeetCode bio ("Summary") to prove ownership. */
+    val ownershipCode: String? get() = repository.myOwnershipCode()
     private val refreshTick = MutableStateFlow(0)
 
     private val _messages = Channel<Pair<String, Boolean>>(Channel.BUFFERED)
@@ -62,7 +70,9 @@ class ConnectedAccountsViewModel(app: Application) : AndroidViewModel(app) {
                 username = username,
                 profile = profile,
                 lastSyncAt = sync?.lastSyncAt ?: 0L,
-                syncError = sync?.lastError.takeIf { (sync?.consecutiveFailures ?: 0) > 0 }
+                syncError = sync?.lastError.takeIf { (sync?.consecutiveFailures ?: 0) > 0 },
+                ownershipVerified = profile != null && myUid != null &&
+                    LeetCodeVerification.ownsAccount(profile.aboutMe, myUid)
             )
         }.stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), LeetCodeCardState.Loading)
 
@@ -85,6 +95,20 @@ class ConnectedAccountsViewModel(app: Application) : AndroidViewModel(app) {
             repository.unlink()
                 .onSuccess { _messages.trySend("LeetCode disconnected" to false) }
                 .onFailure { _messages.trySend((it.message ?: "Couldn't disconnect") to true) }
+        }
+    }
+
+    fun checkOwnership(username: String) {
+        viewModelScope.launch {
+            repository.checkOwnership(username)
+                .onSuccess { owns ->
+                    refreshTick.value += 1
+                    _messages.trySend(
+                        if (owns) "Ownership verified ✓ Keep the code in your bio." to false
+                        else "Code not found in your LeetCode bio yet. LeetCode can take a minute to update." to true
+                    )
+                }
+                .onFailure { _messages.trySend((it.message ?: "Couldn't reach LeetCode") to true) }
         }
     }
 

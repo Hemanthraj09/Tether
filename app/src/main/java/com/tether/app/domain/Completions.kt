@@ -2,11 +2,11 @@ package com.tether.app.domain
 
 import com.tether.app.data.leetcode.RecentSolve
 
-/** Where a completed track item came from. Stored as "leetcode" / "self". */
+/** Where a completion came from. Stored as "leetcode" / "self". */
 enum class CompletionSource(val id: String) {
     /** Seen in the user's public LeetCode data: verified. */
     LEETCODE("leetcode"),
-    /** Ticked by hand (non-LeetCode items, or solves from before connecting). */
+    /** Legacy: ticked by hand in the retired sheets feature. Parsed, never counted. */
     SELF("self");
 
     companion object {
@@ -14,7 +14,7 @@ enum class CompletionSource(val id: String) {
     }
 }
 
-/** One completed item: users/{uid}/completions/{key}. key = LeetCode slug or track-local id. */
+/** One completed item: users/{uid}/completions/{key}. key = LeetCode problem slug. */
 data class Completion(
     val key: String,
     val title: String,
@@ -65,3 +65,6 @@ object SyncBackoff {
 
     fun isAllowed(now: Long, nextAllowedAt: Long): Boolean = now >= nextAllowedAt
 }
+
+/** What the completion index stores per item. */
+data class CompletionEntry(val source: CompletionSource, val completedAt: Long)

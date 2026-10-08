@@ -26,10 +26,8 @@ class TimerModeDialogFragment : DialogFragment() {
             startTimer(TimerMode.STOPWATCH)
         }
 
-        binding.btnPomodoro.setOnClickListener {
-            binding.layoutModes.visibility = View.GONE
-            binding.layoutPomoConfigs.visibility = View.VISIBLE
-        }
+        binding.btnPomodoro.setOnClickListener { showPomodoroOptions(true) }
+        binding.btnPomoBack.setOnClickListener { showPomodoroOptions(false) }
 
         binding.btnPomo25.setOnClickListener {
             startTimer(TimerMode.POMODORO, 25, 5)
@@ -38,6 +36,12 @@ class TimerModeDialogFragment : DialogFragment() {
         binding.btnPomo50.setOnClickListener {
             startTimer(TimerMode.POMODORO, 50, 10)
         }
+    }
+
+    private fun showPomodoroOptions(show: Boolean) {
+        binding.layoutModes.visibility = if (show) View.GONE else View.VISIBLE
+        binding.layoutPomoConfigs.visibility = if (show) View.VISIBLE else View.GONE
+        binding.tvModeTitle.text = if (show) "Pick your rhythm" else "How do you want to work?"
     }
 
     override fun onStart() {

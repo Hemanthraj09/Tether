@@ -51,15 +51,7 @@
         android:id="@+id/groupFeedFragment"
         android:name="com.tether.app.ui.home.GroupFeedFragment"
         android:label="Feed"
-        tools:layout="@layout/fragment_group_feed">
-        <action
-            android:id="@+id/action_feed_to_track"
-            app:destination="@id/trackFragment"
-            app:enterAnim="@anim/slide_in_right"
-            app:exitAnim="@anim/slide_out_left"
-            app:popEnterAnim="@anim/slide_in_left"
-            app:popExitAnim="@anim/slide_out_right" />
-    </fragment>
+        tools:layout="@layout/fragment_group_feed" />
 
 
     <fragment
@@ -113,8 +105,15 @@
             app:popEnterAnim="@anim/slide_in_left"
             app:popExitAnim="@anim/slide_out_right" />
         <action
-            android:id="@+id/action_profile_to_track"
-            app:destination="@id/trackFragment"
+            android:id="@+id/action_profile_to_interests"
+            app:destination="@id/interestsFragment"
+            app:enterAnim="@anim/slide_in_right"
+            app:exitAnim="@anim/slide_out_left"
+            app:popEnterAnim="@anim/slide_in_left"
+            app:popExitAnim="@anim/slide_out_right" />
+        <action
+            android:id="@+id/action_profile_to_leetcode"
+            app:destination="@id/leetCodeFragment"
             app:enterAnim="@anim/slide_in_right"
             app:exitAnim="@anim/slide_out_left"
             app:popEnterAnim="@anim/slide_in_left"
@@ -135,24 +134,23 @@
         tools:layout="@layout/fragment_about" />
 
     <fragment
+        android:id="@+id/leetCodeFragment"
+        android:name="com.tether.app.ui.profile.LeetCodeFragment"
+        android:label="LeetCode"
+        tools:layout="@layout/fragment_leetcode" />
+
+    <fragment
         android:id="@+id/faqFragment"
         android:name="com.tether.app.ui.profile.FaqFragment"
         android:label="FAQ"
         tools:layout="@layout/fragment_faq" />
 
     <fragment
-        android:id="@+id/trackFragment"
-        android:name="com.tether.app.ui.tracks.TrackFragment"
-        android:label="Track"
-        tools:layout="@layout/fragment_track">
-        <argument
-            android:name="trackId"
-            app:argType="string" />
-        <argument
-            android:name="groupId"
-            android:defaultValue=""
-            app:argType="string" />
-    </fragment>
+        android:id="@+id/interestsFragment"
+        android:name="com.tether.app.ui.onboarding.InterestsFragment"
+        android:label="Focus areas"
+        tools:layout="@layout/fragment_interests" />
+
 
     <fragment
         android:id="@+id/groupFragment"

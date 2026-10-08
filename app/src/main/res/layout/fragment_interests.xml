@@ -1,0 +1,101 @@
+<?xml version="1.0" encoding="utf-8"?>
+<ScrollView xmlns:android="http://schemas.android.com/apk/res/android"
+    xmlns:app="http://schemas.android.com/apk/res-auto"
+    android:layout_width="match_parent"
+    android:layout_height="match_parent"
+    android:background="@color/colorBackground"
+    android:fillViewport="true">
+
+    <LinearLayout
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:orientation="vertical"
+        android:paddingHorizontal="24dp"
+        android:paddingTop="64dp"
+        android:paddingBottom="32dp">
+
+        <TextView
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:text="What do you want to stay accountable for?"
+            android:textColor="@color/colorTextPrimary"
+            android:textSize="26sp"
+            android:textStyle="bold" />
+
+        <TextView
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:layout_marginTop="8dp"
+            android:text="Pick any, then set a weekly target for each. Your profile compares what you said with what you actually logged."
+            android:textColor="@color/colorTextSecondary"
+            android:textSize="14sp" />
+
+        <com.google.android.material.chip.ChipGroup
+            android:id="@+id/chipsInterests"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:layout_marginTop="24dp"
+            app:chipSpacingHorizontal="8dp"
+            app:chipSpacingVertical="8dp" />
+
+        <TextView
+            android:id="@+id/tvTargetsTitle"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:layout_marginTop="24dp"
+            android:text="Weekly targets"
+            android:textColor="@color/colorTextPrimary"
+            android:textSize="16sp"
+            android:textStyle="bold"
+            android:visibility="gone" />
+
+        <LinearLayout
+            android:id="@+id/targetsContainer"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:orientation="vertical" />
+
+        <TextView
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:layout_marginTop="28dp"
+            android:text="You are… (optional)"
+            android:textColor="@color/colorTextPrimary"
+            android:textSize="16sp"
+            android:textStyle="bold" />
+
+        <com.google.android.material.chip.ChipGroup
+            android:id="@+id/chipsStage"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:layout_marginTop="12dp"
+            app:singleSelection="true" />
+
+        <View
+            android:layout_width="match_parent"
+            android:layout_height="0dp"
+            android:layout_weight="1"
+            android:minHeight="32dp" />
+
+        <Button
+            android:id="@+id/btnInterestsContinue"
+            android:layout_width="match_parent"
+            android:layout_height="52dp"
+            android:background="@drawable/bg_button_primary"
+            android:text="Continue"
+            android:textAllCaps="false"
+            android:textColor="@color/colorTextPrimary"
+            android:textSize="15sp" />
+
+        <TextView
+            android:id="@+id/tvInterestsSkip"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:layout_gravity="center_horizontal"
+            android:layout_marginTop="16dp"
+            android:padding="8dp"
+            android:text="Skip for now"
+            android:textColor="@color/colorTextSecondary"
+            android:textSize="14sp" />
+    </LinearLayout>
+</ScrollView>

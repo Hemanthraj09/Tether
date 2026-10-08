@@ -1,4 +1,4 @@
 {
-  "profile": "query tetherProfile($username: String!) { matchedUser(username: $username) { username profile { ranking } submitStatsGlobal { acSubmissionNum { difficulty count } } userCalendar { streak totalActiveDays } tagProblemCounts { advanced { tagName problemsSolved } intermediate { tagName problemsSolved } fundamental { tagName problemsSolved } } } }",
+  "profile": "query tetherProfile($username: String!) { matchedUser(username: $username) { username profile { ranking aboutMe } submitStatsGlobal { acSubmissionNum { difficulty count } } userCalendar { streak totalActiveDays } tagProblemCounts { advanced { tagName problemsSolved } intermediate { tagName problemsSolved } fundamental { tagName problemsSolved } } } }",
   "recent": "query tetherRecent($username: String!, $limit: Int!) { recentAcSubmissionList(username: $username, limit: $limit) { id title titleSlug timestamp } }"
 }

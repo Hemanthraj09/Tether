@@ -4,6 +4,11 @@ import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.google.firebase.auth.FirebaseAuth
 import com.google.firebase.firestore.FirebaseFirestore
+import com.tether.app.data.repository.CompletionRepository
+import com.tether.app.data.repository.GroupRepository
+import com.tether.app.data.repository.ProfileRepository
+import com.tether.app.domain.SaidVsDid
+import com.tether.app.domain.SolveCounts
 import com.tether.app.data.snapshotFlow
 import com.tether.app.domain.StreakCalculator
 import com.tether.app.utils.DateKeys
@@ -20,6 +25,7 @@ import kotlinx.coroutines.flow.flowOf
 import kotlinx.coroutines.flow.flowOn
 import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.flow.stateIn
+import java.util.Calendar
 
 data class ProfileUiState(
     val name: String,
@@ -29,7 +35,15 @@ data class ProfileUiState(
     val todayHours: Double = 0.0,
     val groupCount: Int = 0,
     val year: Int = DateKeys.currentYear(),
-    val hoursByDate: Map<String, Double> = emptyMap()
+    val hoursByDate: Map<String, Double> = emptyMap(),
+    /** "yyyy-MM-dd" → verified LeetCode solves (for the LeetCode heatmap). */
+    val solvesByDate: Map<String, Int> = emptyMap()
+)
+
+/** "Said vs. Did": null rows = never asked about focus areas. */
+data class SaidVsDidState(
+    val asked: Boolean,
+    val rows: List<SaidVsDid.AreaProgress>
 )
 
 /**
@@ -63,29 +77,37 @@ class ProfileViewModel : ViewModel() {
             doc?.getString("name")?.takeIf { it.isNotBlank() } ?: fallbackName
         }.distinctUntilChanged()
 
-        val groupIdsFlow = userFlow.map { doc ->
-            (doc?.get("groupIds") as? List<*>)?.mapNotNull { it as? String } ?: emptyList()
-        }.distinctUntilChanged()
+        // Membership lives on the groups themselves (not on the public profile).
+        val groupIdsFlow = GroupRepository().observeUserGroups()
+            .map { groups -> groups.map { it.id } }
+            .distinctUntilChanged()
 
-        // One query feeds both the heatmap and today's hours.
-        val hoursByDateFlow = firestore.collection("logs")
-            .whereEqualTo("userId", uid)
-            .snapshotFlow()
-            .map { snapshot ->
-                val totals = HashMap<String, Double>()
-                snapshot?.documents?.forEach { doc ->
-                    val date = doc.getString("date") ?: return@forEach
-                    val hours = doc.getDouble("value") ?: 0.0
-                    totals[date] = (totals[date] ?: 0.0) + hours
-                }
-                totals as Map<String, Double>
+        // One small document per year (users/{uid}/heatmap/{year}) feeds both the
+        // heatmap and today's hours, instead of reading every log ever written.
+        val hoursByDateFlow = DateKeys.todayFlow()
+            .map { it.substring(0, 4) }
+            .distinctUntilChanged()
+            .flatMapLatest { year ->
+                firestore.collection("users").document(uid).collection("heatmap").document(year)
+                    .snapshotFlow()
+                    .map { doc ->
+                        doc?.data.orEmpty().mapNotNull { (date, hours) ->
+                            (hours as? Number)?.let { date to it.toDouble() }
+                        }.toMap()
+                    }
             }
             .flowOn(Dispatchers.Default)
 
         val streakFlow = groupIdsFlow.flatMapLatest { ids -> bestActiveStreak(ids) }
 
-        combine(nameFlow, groupIdsFlow, hoursByDateFlow, streakFlow, DateKeys.todayFlow()) {
-                name, groupIds, hoursByDate, streak, today ->
+        // The user's own completion index (1 document) → solves per day.
+        val heatmapsFlow = combine(
+            hoursByDateFlow,
+            CompletionRepository().observe(uid).map { SolveCounts.byDay(it) }
+        ) { hours, solves -> hours to solves }
+
+        combine(nameFlow, groupIdsFlow, heatmapsFlow, streakFlow, DateKeys.todayFlow()) {
+                name, groupIds, (hoursByDate, solvesByDate), streak, today ->
             ProfileUiState(
                 name = name,
                 email = email,
@@ -94,9 +116,50 @@ class ProfileViewModel : ViewModel() {
                 todayHours = hoursByDate[today] ?: 0.0,
                 groupCount = groupIds.size,
                 year = today.substring(0, 4).toIntOrNull() ?: DateKeys.currentYear(),
-                hoursByDate = hoursByDate
+                hoursByDate = hoursByDate,
+                solvesByDate = solvesByDate
             )
         }.stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), initialState)
+    }
+
+    /**
+     * What you said matters (focus areas + weekly targets) against the hours
+     * you logged this week in groups with a matching goal. One weekly stats
+     * document per group, so it's live and costs a handful of reads.
+     */
+    @OptIn(ExperimentalCoroutinesApi::class)
+    val saidVsDid: StateFlow<SaidVsDidState?> = if (uid.isEmpty()) {
+        flowOf<SaidVsDidState?>(null).stateIn(viewModelScope, SharingStarted.Eagerly, null)
+    } else {
+        val goalsFlow = GroupRepository().observeUserGroups()
+            .map { groups -> groups.associate { it.id to it.goalType } }
+            .distinctUntilChanged()
+        val weekFlow = DateKeys.todayFlow().map { DateKeys.weekKey() }.distinctUntilChanged()
+        val weeklyHoursFlow = combine(goalsFlow, weekFlow) { goals, week -> goals.keys to week }
+            .flatMapLatest { (groupIds, week) -> myWeeklyHours(groupIds.toList(), week) }
+
+        combine(ProfileRepository().observePlan(), goalsFlow, weeklyHoursFlow) { plan, goals, hours ->
+            SaidVsDidState(
+                asked = plan.interests != null,
+                rows = SaidVsDid.compute(
+                    interests = plan.interests.orEmpty(),
+                    targets = plan.targets,
+                    groupGoals = goals,
+                    weeklyHours = hours,
+                    dayOfWeek = DateKeys.weekCalendar().get(Calendar.DAY_OF_WEEK)
+                )
+            )
+        }.stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), null)
+    }
+
+    private fun myWeeklyHours(groupIds: List<String>, week: String): Flow<Map<String, Double>> {
+        if (groupIds.isEmpty()) return flowOf(emptyMap())
+        val flows = groupIds.map { gid ->
+            firestore.collection("groupStats").document(gid).collection("weekly").document(week)
+                .snapshotFlow()
+                .map { doc -> gid to ((doc?.get(uid) as? Number)?.toDouble() ?: 0.0) }
+        }
+        return combine(flows) { pairs -> pairs.toMap() }
     }
 
     /**

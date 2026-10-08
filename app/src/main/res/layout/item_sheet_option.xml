@@ -1,0 +1,80 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- One row in a bottom-sheet menu: icon, label, optional description, check when selected. -->
+<LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
+    xmlns:app="http://schemas.android.com/apk/res-auto"
+    xmlns:tools="http://schemas.android.com/tools"
+    android:layout_width="match_parent"
+    android:layout_height="wrap_content"
+    android:background="?attr/selectableItemBackground"
+    android:clickable="true"
+    android:focusable="true"
+    android:gravity="center_vertical"
+    android:minHeight="64dp"
+    android:orientation="horizontal"
+    android:paddingHorizontal="24dp"
+    android:paddingVertical="10dp">
+
+    <FrameLayout
+        android:id="@+id/flOptionIcon"
+        android:layout_width="40dp"
+        android:layout_height="40dp"
+        android:background="@drawable/bg_icon_container">
+
+        <ImageView
+            android:id="@+id/ivOptionIcon"
+            android:layout_width="20dp"
+            android:layout_height="20dp"
+            android:layout_gravity="center"
+            android:importantForAccessibility="no"
+            android:visibility="gone"
+            app:tint="@color/colorTextPrimary" />
+
+        <TextView
+            android:id="@+id/tvOptionEmoji"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:layout_gravity="center"
+            android:textSize="18sp"
+            android:visibility="gone"
+            tools:text="📷"
+            tools:visibility="visible" />
+    </FrameLayout>
+
+    <LinearLayout
+        android:layout_width="0dp"
+        android:layout_height="wrap_content"
+        android:layout_marginStart="16dp"
+        android:layout_weight="1"
+        android:orientation="vertical">
+
+        <TextView
+            android:id="@+id/tvOptionLabel"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:textColor="@color/colorTextPrimary"
+            android:textSize="15sp"
+            tools:text="Take a photo" />
+
+        <TextView
+            android:id="@+id/tvOptionDescription"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:layout_marginTop="2dp"
+            android:textColor="@color/colorTextSecondary"
+            android:textSize="12sp"
+            android:visibility="gone"
+            tools:text="Use your camera now"
+            tools:visibility="visible" />
+    </LinearLayout>
+
+    <ImageView
+        android:id="@+id/ivOptionCheck"
+        android:layout_width="20dp"
+        android:layout_height="20dp"
+        android:layout_marginStart="12dp"
+        android:importantForAccessibility="no"
+        android:src="@drawable/ic_check"
+        android:visibility="gone"
+        app:tint="@color/colorAccent"
+        tools:visibility="visible" />
+</LinearLayout>

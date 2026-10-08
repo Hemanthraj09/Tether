@@ -8,6 +8,7 @@ import androidx.lifecycle.Lifecycle
 import androidx.lifecycle.lifecycleScope
 import androidx.lifecycle.repeatOnLifecycle
 import com.google.android.material.bottomsheet.BottomSheetDialogFragment
+import com.tether.app.R
 import com.tether.app.databinding.FragmentTimerControlBinding
 import kotlinx.coroutines.launch
 
@@ -45,6 +46,9 @@ class TimerControlFragment : BottomSheetDialogFragment() {
             timerService = null
         }
     }
+
+    // Same rounded dark sheet as the log sheet and menus.
+    override fun getTheme(): Int = R.style.BottomSheetDialogTheme
 
     override fun onCreateView(inflater: LayoutInflater, container: ViewGroup?, savedInstanceState: Bundle?): View {
         _binding = FragmentTimerControlBinding.inflate(inflater, container, false)

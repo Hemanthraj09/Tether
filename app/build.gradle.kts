@@ -15,8 +15,8 @@ android {
         applicationId = "com.tether.app"
         minSdk = 26
         targetSdk = 36
-        versionCode = 3
-        versionName = "1.2.0"
+        versionCode = 5
+        versionName = "1.4.0"
 
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
         // Crash reports only from release builds (see AndroidManifest meta-data).
@@ -79,6 +79,8 @@ dependencies {
     // RecyclerView & CardView
     implementation("androidx.recyclerview:recyclerview:1.3.2")
     implementation("androidx.cardview:cardview:1.0.0")
+    // Reliable EXIF orientation for proof photos (the framework class has known bugs).
+    implementation("androidx.exifinterface:exifinterface:1.3.7")
 
     testImplementation(libs.junit)
     // Android's org.json is a stub in JVM unit tests; use the real implementation there.

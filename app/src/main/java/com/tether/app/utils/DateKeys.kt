@@ -38,10 +38,37 @@ object DateKeys {
      * (same as before), but the year is the *week-year*, so the last days of
      * December no longer collide with week 1 of the same calendar year.
      */
-    fun weekKey(calendar: Calendar = Calendar.getInstance()): String {
+    fun weekKey(calendar: Calendar = weekCalendar()): String {
         val week = calendar.get(Calendar.WEEK_OF_YEAR)
         val year = calendar.weekYear
         return "$year-W$week"
+    }
+
+    /** Local midnight today, in epoch millis. */
+    fun startOfTodayMillis(): Long = Calendar.getInstance().apply {
+        set(Calendar.HOUR_OF_DAY, 0)
+        set(Calendar.MINUTE, 0)
+        set(Calendar.SECOND, 0)
+        set(Calendar.MILLISECOND, 0)
+    }.timeInMillis
+
+    /** Start of the current week (Sunday 00:00 local), matching [weekKey]. */
+    fun startOfWeekMillis(): Long = weekCalendar().apply {
+        set(Calendar.DAY_OF_WEEK, Calendar.SUNDAY)
+        set(Calendar.HOUR_OF_DAY, 0)
+        set(Calendar.MINUTE, 0)
+        set(Calendar.SECOND, 0)
+        set(Calendar.MILLISECOND, 0)
+    }.timeInMillis
+
+    /**
+     * The same week numbering on every phone (Sunday-first, week 1 contains
+     * Jan 1, i.e. the India/US convention), so members in other regions don't
+     * write to different weekly documents.
+     */
+    fun weekCalendar(): Calendar = Calendar.getInstance(Locale.US).apply {
+        firstDayOfWeek = Calendar.SUNDAY
+        minimalDaysInFirstWeek = 1
     }
 
     fun currentYear(): Int = Calendar.getInstance().get(Calendar.YEAR)

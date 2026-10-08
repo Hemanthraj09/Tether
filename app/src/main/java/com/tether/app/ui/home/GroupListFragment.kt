@@ -16,6 +16,9 @@ import com.google.firebase.auth.FirebaseAuth
 import com.tether.app.R
 import com.tether.app.data.model.Group
 import com.tether.app.databinding.FragmentGroupListBinding
+import com.tether.app.ui.common.SheetOption
+import com.tether.app.ui.common.TetherDialogs
+import com.tether.app.ui.common.TetherSheet
 import com.tether.app.utils.NotificationStore
 import com.tether.app.utils.TetherToast
 import com.tether.app.utils.navigateSafe
@@ -114,44 +117,43 @@ class GroupListFragment : Fragment() {
         val currentUid = FirebaseAuth.getInstance().currentUser?.uid ?: return
         val isCreator = group.createdBy == currentUid
 
-        if (isCreator) {
-            android.app.AlertDialog.Builder(requireContext())
-                .setTitle(group.name)
-                .setItems(arrayOf("Delete Group")) { _, _ ->
-                    confirmDeleteFromList(group)
-                }
-                .show()
-        } else {
-            android.app.AlertDialog.Builder(requireContext())
-                .setTitle(group.name)
-                .setItems(arrayOf("Leave Group")) { _, _ ->
-                    confirmLeaveFromList(group)
-                }
-                .show()
-        }
+        val count = group.members.size
+        TetherSheet.show(
+            requireContext(),
+            title = group.name,
+            subtitle = "${group.goalType} • $count member" + if (count != 1) "s" else "",
+            options = listOf(
+                SheetOption("Open group", icon = R.drawable.ic_arrow_forward) { navigateToGroupFeed(group) },
+                if (isCreator) SheetOption("Delete group", "Removes it for everyone", icon = R.drawable.ic_delete,
+                    destructive = true) { confirmDeleteFromList(group) }
+                else SheetOption("Leave group", icon = R.drawable.ic_logout, destructive = true) { confirmLeaveFromList(group) }
+            )
+        )
     }
 
     private fun confirmDeleteFromList(group: Group) {
-        android.app.AlertDialog.Builder(requireContext())
-            .setTitle("Delete Group")
-            .setMessage("Are you sure you want to delete \"${group.name}\"? This cannot be undone.")
-            .setPositiveButton("Delete") { _, _ -> viewModel.deleteGroup(group) }
-            .setNegativeButton("Cancel", null)
-            .show()
+        TetherDialogs.confirm(
+            requireContext(),
+            title = "Delete \"${group.name}\"?",
+            message = "The group is removed for every member. Everyone keeps their own hours and heatmap. This can't be undone.",
+            confirmText = "Delete",
+            destructive = true
+        ) { viewModel.deleteGroup(group) }
     }
 
     private fun confirmLeaveFromList(group: Group) {
-        android.app.AlertDialog.Builder(requireContext())
-            .setTitle("Leave Group")
-            .setMessage("Are you sure you want to leave \"${group.name}\"?")
-            .setPositiveButton("Leave") { _, _ -> viewModel.leaveGroup(group) }
-            .setNegativeButton("Cancel", null)
-            .show()
+        TetherDialogs.confirm(
+            requireContext(),
+            title = "Leave \"${group.name}\"?",
+            message = "You can rejoin later with the invite code, if there's still room.",
+            confirmText = "Leave",
+            destructive = true
+        ) { viewModel.leaveGroup(group) }
     }
 
     private fun showNotificationsBottomSheet() {
         val notifications = NotificationStore.getNotifications(requireContext())
-        val bottomSheet = com.google.android.material.bottomsheet.BottomSheetDialog(requireContext())
+        val bottomSheet = com.google.android.material.bottomsheet.BottomSheetDialog(requireContext(), R.style.BottomSheetDialogTheme)
         val view = layoutInflater.inflate(R.layout.bottom_sheet_notifications, null)
         bottomSheet.setContentView(view)
 

@@ -1,11 +1,12 @@
 package com.tether.app.ui.leaderboard
 
-import androidx.lifecycle.ViewModel
+import android.app.Application
+import androidx.lifecycle.AndroidViewModel
 import androidx.lifecycle.viewModelScope
 import com.tether.app.data.model.Group
+import com.tether.app.data.repository.BoardRepository
 import com.tether.app.data.repository.GroupRepository
 import com.tether.app.data.repository.LeaderboardEntry
-import com.tether.app.data.repository.LeaderboardRepository
 import com.tether.app.data.repository.NudgeRepository
 import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.channels.Channel
@@ -23,9 +24,8 @@ import kotlinx.coroutines.flow.receiveAsFlow
 import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.launch
 
-class LeaderboardViewModel : ViewModel() {
+class LeaderboardViewModel(app: Application) : AndroidViewModel(app) {
 
-    private val leaderboardRepository = LeaderboardRepository()
     private val nudgeRepository = NudgeRepository()
 
     val groups: StateFlow<List<Group>?> = GroupRepository().observeUserGroups()
@@ -47,7 +47,7 @@ class LeaderboardViewModel : ViewModel() {
         .distinctUntilChanged()
         .flatMapLatest { groupId ->
             if (groupId == null) flowOf(emptyList())
-            else leaderboardRepository.observeLeaderboard(groupId)
+            else BoardRepository(app).observe(groupId)
         }
         .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), null)
 

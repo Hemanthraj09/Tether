@@ -1,0 +1,44 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- LeetCode ownership: the code to paste into the bio (tap to copy) and a link to LeetCode. -->
+<LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
+    xmlns:tools="http://schemas.android.com/tools"
+    android:layout_width="match_parent"
+    android:layout_height="wrap_content"
+    android:orientation="vertical">
+
+    <TextView
+        android:id="@+id/tvVerifyCode"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:background="@drawable/bg_code_pill"
+        android:clickable="true"
+        android:focusable="true"
+        android:fontFamily="monospace"
+        android:foreground="?attr/selectableItemBackground"
+        android:gravity="center"
+        android:paddingVertical="14dp"
+        android:textColor="@color/colorAccent"
+        android:textSize="20sp"
+        android:textStyle="bold"
+        tools:text="tether-1a2b3c" />
+
+    <TextView
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:layout_marginTop="6dp"
+        android:gravity="center"
+        android:text="Tap the code to copy it"
+        android:textColor="@color/colorTextSecondary"
+        android:textSize="12sp" />
+
+    <TextView
+        android:id="@+id/tvOpenLeetCode"
+        android:layout_width="wrap_content"
+        android:layout_height="wrap_content"
+        android:layout_gravity="center_horizontal"
+        android:layout_marginTop="10dp"
+        android:padding="6dp"
+        android:text="Open LeetCode profile settings ↗"
+        android:textColor="@color/colorAccent"
+        android:textSize="13sp" />
+</LinearLayout>

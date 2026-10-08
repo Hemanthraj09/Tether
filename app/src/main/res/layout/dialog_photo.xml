@@ -1,0 +1,39 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- Full-screen proof photo with who/what caption and a close button. -->
+<FrameLayout xmlns:android="http://schemas.android.com/apk/res/android"
+    xmlns:app="http://schemas.android.com/apk/res-auto"
+    xmlns:tools="http://schemas.android.com/tools"
+    android:layout_width="match_parent"
+    android:layout_height="match_parent"
+    android:background="#000000">
+
+    <ImageView
+        android:id="@+id/ivPhotoFull"
+        android:layout_width="match_parent"
+        android:layout_height="match_parent"
+        android:contentDescription="Proof photo"
+        android:scaleType="fitCenter" />
+
+    <ImageButton
+        android:id="@+id/btnPhotoClose"
+        android:layout_width="40dp"
+        android:layout_height="40dp"
+        android:layout_gravity="top|end"
+        android:layout_margin="20dp"
+        android:background="@drawable/bg_icon_container"
+        android:contentDescription="Close"
+        android:src="@drawable/ic_close"
+        app:tint="@color/colorTextPrimary" />
+
+    <TextView
+        android:id="@+id/tvPhotoCaption"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:layout_gravity="bottom"
+        android:background="#B3000000"
+        android:lineSpacingExtra="2dp"
+        android:padding="20dp"
+        android:textColor="@color/colorTextPrimary"
+        android:textSize="14sp"
+        tools:text="Asha · 1h 30m\nSolved 3 graph problems" />
+</FrameLayout>

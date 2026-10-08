@@ -8,6 +8,7 @@
     <color name="colorTextSecondary">#888888</color>
     <color name="colorBorder">#2A2A2A</color>
     <color name="elevated">#2A2A2A</color>
+    <color name="colorDanger">#EF4444</color>
     <color name="colorGold">#FFD700</color>
     <color name="colorSilver">#C0C0C0</color>
     <color name="colorBronze">#CD7F32</color>

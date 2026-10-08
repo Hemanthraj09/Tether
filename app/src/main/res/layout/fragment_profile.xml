@@ -106,6 +106,16 @@
                             android:text="@string/your_email"
                             android:textColor="@color/colorTextSecondary"
                             android:textSize="13sp" />
+
+                        <TextView
+                            android:id="@+id/tvEmailVerify"
+                            android:layout_width="wrap_content"
+                            android:layout_height="wrap_content"
+                            android:layout_marginTop="4dp"
+                            android:text="Email not verified · Resend link"
+                            android:textColor="@color/colorAccent"
+                            android:textSize="12sp"
+                            android:visibility="gone" />
                     </LinearLayout>
                 </androidx.constraintlayout.widget.ConstraintLayout>
             </androidx.cardview.widget.CardView>
@@ -222,6 +232,59 @@
                 </LinearLayout>
             </androidx.cardview.widget.CardView>
 
+            <!-- Said vs. Did: focus areas + weekly targets vs. hours actually logged -->
+            <LinearLayout
+                android:id="@+id/cardSaidVsDid"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:layout_marginTop="16dp"
+                android:background="@drawable/bg_card"
+                android:orientation="vertical"
+                android:padding="16dp">
+
+                <LinearLayout
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:gravity="center_vertical"
+                    android:orientation="horizontal">
+
+                    <TextView
+                        android:layout_width="0dp"
+                        android:layout_height="wrap_content"
+                        android:layout_weight="1"
+                        android:text="Said vs. Did"
+                        android:textColor="@color/colorTextPrimary"
+                        android:textSize="16sp"
+                        android:textStyle="bold" />
+
+                    <TextView
+                        android:id="@+id/btnEditFocus"
+                        android:layout_width="wrap_content"
+                        android:layout_height="wrap_content"
+                        android:background="@drawable/bg_toggle_active"
+                        android:paddingHorizontal="14dp"
+                        android:paddingVertical="6dp"
+                        android:text="Edit"
+                        android:textColor="@color/colorTextPrimary"
+                        android:textSize="13sp" />
+                </LinearLayout>
+
+                <TextView
+                    android:id="@+id/tvSaidSubtitle"
+                    android:layout_width="wrap_content"
+                    android:layout_height="wrap_content"
+                    android:layout_marginTop="2dp"
+                    android:text="This week · resets Sunday"
+                    android:textColor="@color/colorTextSecondary"
+                    android:textSize="12sp" />
+
+                <LinearLayout
+                    android:id="@+id/saidRows"
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:orientation="vertical" />
+            </LinearLayout>
+
             <!-- SECTION B2 — Connected accounts (LeetCode first; more sources later) -->
             <androidx.cardview.widget.CardView
                 android:layout_width="match_parent"
@@ -295,22 +358,25 @@
 
                             <TextView
                                 android:id="@+id/tvLeetCodeStats"
-                                android:layout_width="wrap_content"
+                                android:layout_width="match_parent"
                                 android:layout_height="wrap_content"
                                 android:layout_marginTop="2dp"
+                                android:ellipsize="end"
+                                android:maxLines="1"
                                 android:text="Sync solved problems automatically"
                                 android:textColor="@color/colorTextSecondary"
                                 android:textSize="12sp" />
-
-                            <TextView
-                                android:id="@+id/tvLeetCodeDetail"
-                                android:layout_width="wrap_content"
-                                android:layout_height="wrap_content"
-                                android:layout_marginTop="2dp"
-                                android:textColor="@color/colorTextSecondary"
-                                android:textSize="12sp"
-                                android:visibility="gone" />
                         </LinearLayout>
+
+                        <ImageView
+                            android:id="@+id/ivLeetCodeChevron"
+                            android:layout_width="16dp"
+                            android:layout_height="16dp"
+                            android:layout_marginStart="8dp"
+                            android:alpha="0.5"
+                            android:importantForAccessibility="no"
+                            android:src="@drawable/ic_chevron_right"
+                            android:visibility="gone" />
 
                         <TextView
                             android:id="@+id/btnLeetCodeAction"
@@ -325,53 +391,6 @@
                     </LinearLayout>
                 </LinearLayout>
             </androidx.cardview.widget.CardView>
-
-            <!-- Tracks row -->
-            <androidx.constraintlayout.widget.ConstraintLayout
-                android:id="@+id/btnTracks"
-                android:layout_width="match_parent"
-                android:layout_height="64dp"
-                android:layout_marginTop="16dp"
-                android:background="@drawable/bg_card"
-                android:clickable="true"
-                android:focusable="true"
-                android:foreground="?attr/selectableItemBackground">
-
-                <TextView
-                    android:id="@+id/tvTracksTitle"
-                    android:layout_width="wrap_content"
-                    android:layout_height="wrap_content"
-                    android:layout_marginStart="16dp"
-                    android:text="Tracks"
-                    android:textColor="@color/colorTextPrimary"
-                    android:textSize="15sp"
-                    app:layout_constraintBottom_toTopOf="@id/tvTracksSubtitle"
-                    app:layout_constraintStart_toStartOf="parent"
-                    app:layout_constraintTop_toTopOf="parent"
-                    app:layout_constraintVertical_chainStyle="packed" />
-
-                <TextView
-                    android:id="@+id/tvTracksSubtitle"
-                    android:layout_width="wrap_content"
-                    android:layout_height="wrap_content"
-                    android:layout_marginStart="16dp"
-                    android:text="Structured challenges to work through"
-                    android:textColor="@color/colorTextSecondary"
-                    android:textSize="12sp"
-                    app:layout_constraintBottom_toBottomOf="parent"
-                    app:layout_constraintStart_toStartOf="parent"
-                    app:layout_constraintTop_toBottomOf="@id/tvTracksTitle" />
-
-                <ImageView
-                    android:layout_width="16dp"
-                    android:layout_height="16dp"
-                    android:layout_marginEnd="16dp"
-                    android:alpha="0.4"
-                    android:src="@drawable/ic_chevron_right"
-                    app:layout_constraintBottom_toBottomOf="parent"
-                    app:layout_constraintEnd_toEndOf="parent"
-                    app:layout_constraintTop_toTopOf="parent" />
-            </androidx.constraintlayout.widget.ConstraintLayout>
 
             <!-- SECTION C — Heatmap placeholder -->
             <androidx.cardview.widget.CardView
@@ -400,6 +419,21 @@
                         android:textStyle="bold"
                         app:layout_constraintStart_toStartOf="parent"
                         app:layout_constraintTop_toTopOf="parent" />
+
+                    <TextView
+                        android:id="@+id/tvHeatmapToggle"
+                        android:layout_width="wrap_content"
+                        android:layout_height="wrap_content"
+                        android:background="@drawable/bg_card"
+                        android:paddingHorizontal="10dp"
+                        android:paddingVertical="4dp"
+                        android:text="Hours"
+                        android:textColor="@color/colorTextPrimary"
+                        android:textSize="12sp"
+                        android:visibility="gone"
+                        app:layout_constraintBottom_toBottomOf="@id/tvHeatmapSubtitle"
+                        app:layout_constraintEnd_toEndOf="parent"
+                        app:layout_constraintTop_toTopOf="@id/tvHeatmapTitle" />
 
                     <TextView
                         android:id="@+id/tvHeatmapSubtitle"
@@ -511,7 +545,7 @@
                 android:layout_width="match_parent"
                 android:layout_height="56dp"
                 android:layout_marginTop="16dp"
-                android:layout_marginBottom="24dp"
+                android:layout_marginBottom="8dp"
                 android:background="@drawable/bg_card"
                 android:clickable="true"
                 android:focusable="true"
@@ -538,6 +572,19 @@
                     app:layout_constraintStart_toEndOf="@id/icLogout"
                     app:layout_constraintTop_toTopOf="parent" />
             </androidx.constraintlayout.widget.ConstraintLayout>
+
+            <!-- Delete account (Play Store requirement) -->
+            <TextView
+                android:id="@+id/btnDeleteAccount"
+                android:layout_width="wrap_content"
+                android:layout_height="48dp"
+                android:layout_gravity="center_horizontal"
+                android:layout_marginBottom="24dp"
+                android:gravity="center"
+                android:paddingHorizontal="16dp"
+                android:text="Delete account"
+                android:textColor="#88EF4444"
+                android:textSize="13sp" />
         </LinearLayout>
     </ScrollView>
 

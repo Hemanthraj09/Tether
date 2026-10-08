@@ -9,6 +9,16 @@ data class Group(
     val createdBy: String = "",
     val isSolo: Boolean = false,
     val createdAt: Long = 0L,
-    /** Track this group is racing through ("" = none). Only offered for goals that have tracks. */
-    val trackId: String = ""
-)
+    /**
+     * What the leaderboard ranks: "hours" (default) or "solves" (Coding groups,
+     * verified LeetCode problems solved). Only the creator can change it.
+     */
+    val metric: String = METRIC_HOURS,
+    /** Photo proof on logs: "off", "optional" (default) or "required". Creator only. */
+    val proof: String = com.tether.app.domain.Proof.MODE_OPTIONAL
+) {
+    companion object {
+        const val METRIC_HOURS = "hours"
+        const val METRIC_SOLVES = "solves"
+    }
+}
